@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsx index.ts",
+    "start": "node dist/src/index.js",
+    "dev": "tsx src/index.ts",
     "inspect": "npx @modelcontextprotocol/inspector",
     "serve": "ngrok http 3000 --host-header=rewrite"
   },

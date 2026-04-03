@@ -94,7 +94,7 @@ docker run -p 3000:3000 --env-file .env tus-mcp
 
 To deploy directly to Google Cloud Run:
 ```bash
-gcloud run deploy tus-mcp --source . --region europe-west1 --allow-unauthenticated --set-env-vars MCP_TOKEN=token --project=project-id --port 3000
+gcloud run deploy tus-mcp --source . --region europe-west1 --allow-unauthenticated --set-env-vars MCP_TOKEN=token --set-env-vars ALLOWED_HOSTS=host --project=tus-mcp --port 3000
 ```
 
 ## 🔌 Integrating with AI Clients
@@ -108,7 +108,7 @@ Add the following to your `claude_desktop_config.json`:
   "mcpServers": {
     "tus-mcp": {
       "command": "node",
-      "args": ["/path/to/tus-mcp/dist/index.js"],
+      "args": ["/path/to/tus-mcp/dist/src/index.js"],
       "env": {
         "MCP_TOKEN": "your_secure_token_here",
         "PORT": "3000"
@@ -124,7 +124,12 @@ The server uses `StreamableHTTPServerTransport`. You can connect via HTTP POST t
 
 ## 📁 Project Structure
 
-*   `index.ts`: Main entry point, MCP server implementation, and Express routes.
+*   `src/index.ts`: Main entry point, starts the Express server.
+*   `src/app.ts`: Express application setup and routes.
+*   `src/services/`: External API integration logic (Santander Open Data).
+*   `src/mcp/`: MCP definitions (tools, prompts, server factory).
+*   `src/middleware/`: Express middlewares (authentication).
+*   `src/types/`: TypeScript interfaces and types.
 *   `Dockerfile`: Multi-stage build for production-ready containerization.
 *   `tsconfig.json`: TypeScript configuration.
 *   `dist/`: Compiled JavaScript output.
