@@ -96,7 +96,7 @@ docker run -p 3000:3000 --env-file .env tus-mcp
 
 To deploy directly to Google Cloud Run:
 ```bash
-gcloud run deploy tus-mcp --source . --region europe-west1 --allow-unauthenticated --set-env-vars MCP_TOKEN=token --set-env-vars ALLOWED_HOSTS=host --project=tus-mcp --port 3000
+gcloud run deploy tus-mcp --source . --region europe-west1 --allow-unauthenticated --set-env-vars MCP_TOKEN=token --set-env-vars ALLOWED_HOSTS=host --project=tus-mcp --port 3000 --project=project-id
 ```
 
 ## 🔌 Integrating with AI Clients

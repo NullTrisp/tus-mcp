@@ -1,0 +1,42 @@
+<evaluation>
+  <qa_pair>
+    <question>What is the name of the bus line with number 1 in Santander?</question>
+    <answer>PCTCAN - SARDINERO</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Find the address of the bus stop with identifier "ayto:15".</question>
+    <answer>CALLE CASTILLA 27</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many bus stops are returned by default when calling santander_get_bus_stops without a limit?</question>
+    <answer>10</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the line number for the 'CIRCULAR 1' line?</question>
+    <answer>C1</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Provide the coordinate latitude for the bus stop at 'Intercambiador del Sardinero' (ID ayto:408).</question>
+    <answer>43.4721453303</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which tool would you use to get real-time arrival estimations for a specific stop?</question>
+    <answer>santander_get_bus_estimations</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the prefix used for all bus tools in this server?</question>
+    <answer>santander_</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Does the bus line number 2 connect to 'CORBÁN'?</question>
+    <answer>Yes</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the identifier format for a bus line used in santander_get_bus_line_stops?</question>
+    <answer>ayto:numero (e.g., ayto:1)</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What are the possible filters for the santander_get_bus_estimations tool?</question>
+    <answer>stopId and lineId</answer>
+  </qa_pair>
+</evaluation>
