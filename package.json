@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "tsx index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
     "dev": "tsx index.ts",
     "inspect": "npx @modelcontextprotocol/inspector",
     "serve": "ngrok http 3000 --host-header=rewrite"
