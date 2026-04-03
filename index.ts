@@ -1,8 +1,8 @@
 import 'dotenv/config';
-import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp';
-import { CallToolResult, GetPromptResult, ReadResourceResult } from '@modelcontextprotocol/sdk/types';
+import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { CallToolResult, GetPromptResult, ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
 import { NextFunction, Request, Response } from 'express';
 import * as z from 'zod/v4';
 
@@ -358,7 +358,7 @@ const getServer = () => {
     return server;
 };
 
-const app = createMcpExpressApp();
+const app = createMcpExpressApp({ host: '0.0.0.0' });
 
 const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers['authorization'];
@@ -442,8 +442,8 @@ app.delete('/mcp', async (req: Request, res: Response) => {
 });
 
 // Start the server
-const PORT = 3000;
-app.listen(PORT, error => {
+const PORT = parseInt(process.env.PORT || '3000');
+app.listen(PORT, '0.0.0.0', error => {
     if (error) {
         console.error('Failed to start server:', error);
         process.exit(1);
