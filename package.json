@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "start": "tsx index.ts",
-    "dev": "tsx index.ts"
+    "dev": "tsx index.ts",
+    "inspect": "npx @modelcontextprotocol/inspector",
+    "serve": "ngrok http 3000 --host-header=rewrite"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.5.0",

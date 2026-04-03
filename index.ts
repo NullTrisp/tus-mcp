@@ -23,15 +23,58 @@ interface BusStop {
     [key: string]: any;
 }
 
-interface BusStopsResponse {
+interface BusLine {
+    'ayto:numero'?: string;
+    'dc:name'?: string;
+    'dc:modified'?: string;
+    'dc:identifier'?: string;
+    uri?: string;
+    [key: string]: any;
+}
+
+interface BusLineStop {
+    'wgs84_pos:long'?: string;
+    'gn:coordY'?: string;
+    'gn:coordX'?: string;
+    'ayto:linea'?: string;
+    'dc:modified'?: string;
+    'wgs84_pos:lat'?: string;
+    'ayto:parada'?: string;
+    'dc:identifier'?: string;
+    uri?: string;
+    [key: string]: any;
+}
+
+interface BusEstimation {
+    'ayto:tiempo1'?: string;
+    'ayto:distancia2'?: string;
+    'ayto:destino1'?: string;
+    'ayto:distancia1'?: string;
+    'ayto:tiempo2'?: string;
+    'ayto:paradaId'?: string;
+    'ayto:destino2'?: string;
+    'ayto:fechActual'?: string;
+    'dc:modified'?: string;
+    'dc:identifier'?: string;
+    'ayto:etiqLinea'?: string;
+    uri?: string;
+    [key: string]: any;
+}
+
+interface ApiResponse<T> {
     summary: {
         items: number;
         items_per_page: number;
         pages: number;
         current_page: number;
     };
-    resources: BusStop[];
+    resources: T[];
 }
+
+type BusStopsResponse = ApiResponse<BusStop>;
+type BusLinesResponse = ApiResponse<BusLine>;
+type BusLineStopsResponse = ApiResponse<BusLineStop>;
+type BusEstimationsResponse = ApiResponse<BusEstimation>;
 
 const getServer = () => {
     // Create an MCP server with implementation details
@@ -61,7 +104,7 @@ const getServer = () => {
                     throw new Error(`Failed to fetch bus stops: ${response.statusText}`);
                 }
                 const data = (await response.json()) as BusStopsResponse;
-                let ObjectStops: BusStop[] = data.resources || [];
+                let ObjectStops = data.resources || [];
 
                 if (search) {
                     const searchLower = search.toLowerCase();
@@ -93,6 +136,157 @@ const getServer = () => {
                         {
                             type: 'text',
                             text: `Error fetching bus stops: ${error.message}`
+                        }
+                    ],
+                    isError: true
+                };
+            }
+        }
+    );
+
+    // Register a tool to fetch Santander bus lines
+    server.registerTool(
+        'get-bus-lines',
+        {
+            description: 'Get all bus lines in Santander',
+            inputSchema: {
+                search: z.string().describe('Search term to filter bus lines by name or number').optional()
+            }
+        },
+        async ({ search }): Promise<CallToolResult> => {
+            try {
+                const response = await fetch('http://datos.santander.es/api/rest/datasets/lineas_bus.json');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch bus lines: ${response.statusText}`);
+                }
+                const data = (await response.json()) as BusLinesResponse;
+                let lines = data.resources || [];
+
+                if (search) {
+                    const searchLower = search.toLowerCase();
+                    lines = lines.filter((line) =>
+                        (line['ayto:numero'] && String(line['ayto:numero']).toLowerCase().includes(searchLower)) ||
+                        (line['dc:name'] && String(line['dc:name']).toLowerCase().includes(searchLower))
+                    );
+                }
+
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify({
+                                total_found: lines.length,
+                                lines: lines
+                            }, null, 2)
+                        }
+                    ]
+                };
+            } catch (error: any) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Error fetching bus lines: ${error.message}`
+                        }
+                    ],
+                    isError: true
+                };
+            }
+        }
+    );
+
+    // Register a tool to fetch stops for a specific bus line
+    server.registerTool(
+        'get-bus-line-stops',
+        {
+            description: 'Get all stops for a specific bus line in Santander',
+            inputSchema: {
+                lineId: z.string().describe('The identifier of the bus line (ayto:numero or ayto:linea)')
+            }
+        },
+        async ({ lineId }): Promise<CallToolResult> => {
+            try {
+                const response = await fetch('http://datos.santander.es/api/rest/datasets/lineas_bus_paradas.json');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch bus line stops: ${response.statusText}`);
+                }
+                const data = (await response.json()) as BusLineStopsResponse;
+                let stops = data.resources || [];
+
+                if (lineId) {
+                    stops = stops.filter((stop) =>
+                        (stop['ayto:linea'] && String(stop['ayto:linea']) === lineId)
+                    );
+                }
+
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify({
+                                line: lineId,
+                                total_found: stops.length,
+                                stops: stops
+                            }, null, 2)
+                        }
+                    ]
+                };
+            } catch (error: any) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Error fetching bus line stops: ${error.message}`
+                        }
+                    ],
+                    isError: true
+                };
+            }
+        }
+    );
+
+    // Register a tool to fetch real-time estimations for a specific stop
+    server.registerTool(
+        'get-bus-estimations',
+        {
+            description: 'Get real-time arrival estimations for a specific bus stop in Santander',
+            inputSchema: {
+                stopId: z.string().describe('The identifier of the bus stop (ayto:paradaId)')
+            }
+        },
+        async ({ stopId }): Promise<CallToolResult> => {
+            try {
+                const response = await fetch('http://datos.santander.es/api/rest/datasets/control_flotas_estimaciones.json');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch bus estimations: ${response.statusText}`);
+                }
+                const data = (await response.json()) as BusEstimationsResponse;
+                let estimations = data.resources || [];
+
+                if (stopId) {
+                    estimations = estimations.filter((estim) =>
+                        (estim['ayto:paradaId'] && String(estim['ayto:paradaId']) === stopId)
+                    );
+                }
+
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify({
+                                stopId: stopId,
+                                total_found: estimations.length,
+                                estimations: estimations
+                            }, null, 2)
+                        }
+                    ]
+                };
+            } catch (error: any) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Error fetching bus estimations: ${error.message}`
                         }
                     ],
                     isError: true
