@@ -245,18 +245,21 @@ const getServer = () => {
         }
     );
 
-    // Register a tool to fetch real-time estimations for a specific stop
+    // Register a tool to fetch real-time estimations for a specific stop or line
     server.registerTool(
         'get-bus-estimations',
         {
-            description: 'Get real-time arrival estimations for a specific bus stop in Santander',
+            description: 'Get real-time arrival estimations for Santander bus stops. Can filter by stop ID or line label.',
             inputSchema: {
-                stopId: z.string().describe('The identifier of the bus stop (ayto:paradaId)')
+                stopId: z.string().describe('The identifier of the bus stop (ayto:paradaId)').optional(),
+                lineId: z.string().describe('The label of the bus line (ayto:etiqLinea), e.g., "1", "C1", "24"').optional(),
+                limit: z.number().describe('Maximum number of estimations to return').default(20).optional()
             }
         },
-        async ({ stopId }): Promise<CallToolResult> => {
+        async ({ stopId, lineId, limit }): Promise<CallToolResult> => {
             try {
-                const response = await fetch('http://datos.santander.es/api/rest/datasets/control_flotas_estimaciones.json');
+                // We fetch a larger number of items to ensure we find the stop/line requested
+                const response = await fetch('http://datos.santander.es/api/rest/datasets/control_flotas_estimaciones.json?items=1000');
                 if (!response.ok) {
                     throw new Error(`Failed to fetch bus estimations: ${response.statusText}`);
                 }
@@ -269,14 +272,48 @@ const getServer = () => {
                     );
                 }
 
+                if (lineId) {
+                    const lineLower = String(lineId).toLowerCase();
+                    estimations = estimations.filter((estim) =>
+                        (estim['ayto:etiqLinea'] && String(estim['ayto:etiqLinea']).toLowerCase() === lineLower)
+                    );
+                }
+
+                // Format the output for better readability
+                const formattedEstimations = estimations.map(estim => {
+                    const t1Seconds = parseInt(estim['ayto:tiempo1'] || '0');
+                    const t2Seconds = parseInt(estim['ayto:tiempo2'] || '0');
+                    
+                    return {
+                        line: estim['ayto:etiqLinea'],
+                        stopId: estim['ayto:paradaId'],
+                        destinations: {
+                            first: estim['ayto:destino1'],
+                            second: estim['ayto:destino2']
+                        },
+                        arrivals: {
+                            first_bus: t1Seconds > 0 ? `${Math.round(t1Seconds / 60)} min (${t1Seconds}s)` : 'Arriving/No data',
+                            second_bus: t2Seconds > 0 ? `${Math.round(t2Seconds / 60)} min (${t2Seconds}s)` : 'No data'
+                        },
+                        distances: {
+                            first_bus: estim['ayto:distancia1'] ? `${estim['ayto:distancia1']}m` : undefined,
+                            second_bus: estim['ayto:distancia2'] ? `${estim['ayto:distancia2']}m` : undefined
+                        },
+                        timestamp: estim['ayto:fechActual']
+                    };
+                });
+
+                const finalResults = formattedEstimations.slice(0, limit || 20);
+
                 return {
                     content: [
                         {
                             type: 'text',
                             text: JSON.stringify({
-                                stopId: stopId,
+                                filters: { stopId, lineId },
                                 total_found: estimations.length,
-                                estimations: estimations
+                                returned: finalResults.length,
+                                estimations: finalResults
                             }, null, 2)
                         }
                     ]
