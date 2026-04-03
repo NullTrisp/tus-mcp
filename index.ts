@@ -283,7 +283,7 @@ const getServer = () => {
                 const formattedEstimations = estimations.map(estim => {
                     const t1Seconds = parseInt(estim['ayto:tiempo1'] || '0');
                     const t2Seconds = parseInt(estim['ayto:tiempo2'] || '0');
-                    
+
                     return {
                         line: estim['ayto:etiqLinea'],
                         stopId: estim['ayto:paradaId'],
