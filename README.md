@@ -59,10 +59,12 @@ Create a `.env` file in the root directory (you can use the provided `.env` if i
 ```env
 PORT=3000
 MCP_TOKEN=your_secure_token_here
+ALLOWED_HOSTS=host1,host2,host3
 ```
 
 *   `PORT`: The port the server will listen on (default: 3000).
 *   `MCP_TOKEN`: A security token for authenticating requests to `/mcp`. If not set, authentication is skipped (not recommended for public deployment).
+*   `ALLOWED_HOSTS`: A comma-separated list of allowed hosts for the MCP server.
 
 ## 🏃 Running the Server
 
