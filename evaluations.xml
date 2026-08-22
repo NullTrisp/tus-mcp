@@ -39,4 +39,8 @@
     <question>What is the prefix used for all bus tools in this server?</question>
     <answer>santander_.</answer>
   </qa_pair>
+  <qa_pair>
+    <question>How should ChatGPT display selected Santander bus stops on an interactive map?</question>
+    <answer>First call santander_get_bus_stops or santander_get_bus_line_stops, then pass the selected stops and their numeric WGS84 coordinates to santander_render_bus_stops_map.</answer>
+  </qa_pair>
 </evaluation>

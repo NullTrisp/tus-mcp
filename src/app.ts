@@ -17,7 +17,7 @@ export function createApp(config: RuntimeConfig = loadConfig()) {
     }
 
     app.post('/mcp', async (req: Request, res: Response) => {
-        const server = createServer();
+        const server = createServer(config.widgetDomain);
         try {
             const transport = new StreamableHTTPServerTransport({
                 sessionIdGenerator: undefined

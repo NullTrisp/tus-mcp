@@ -1,8 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerBusMap } from './map.js';
 import { registerTools } from './tools.js';
 import { registerPrompts } from './prompts.js';
 
-export function createServer() {
+export function createServer(widgetDomain = 'https://localhost') {
     const server = new McpServer(
         {
             name: 'tus-mcp-server',
@@ -12,6 +13,7 @@ export function createServer() {
     );
 
     registerTools(server);
+    registerBusMap(server, widgetDomain);
     registerPrompts(server);
 
     return server;

@@ -6,15 +6,18 @@ import { loadConfig } from './config.js';
 test('validates and normalizes runtime configuration', () => {
     assert.deepEqual(loadConfig({}), {
         port: 3000,
+        widgetDomain: 'https://localhost',
         allowedHosts: ['localhost', '127.0.0.1']
     });
     assert.deepEqual(loadConfig({
         PORT: '443',
         OPENAI_APPS_CHALLENGE: '  challenge-value  ',
+        WIDGET_DOMAIN: 'https://widgets.example.com',
         ALLOWED_HOSTS: 'localhost, Api.Example.com,localhost'
     }), {
         port: 443,
         openaiAppsChallenge: 'challenge-value',
+        widgetDomain: 'https://widgets.example.com',
         allowedHosts: ['localhost', 'api.example.com']
     });
 
@@ -23,6 +26,8 @@ test('validates and normalizes runtime configuration', () => {
         { PORT: '65536' },
         { PORT: 'invalid' },
         { OPENAI_APPS_CHALLENGE: '\n' },
+        { WIDGET_DOMAIN: 'http://widgets.example.com' },
+        { WIDGET_DOMAIN: 'https://widgets.example.com/map' },
         { ALLOWED_HOSTS: ' , ' },
         { ALLOWED_HOSTS: 'https://api.example.com' },
         { ALLOWED_HOSTS: 'api.example.com:443' }

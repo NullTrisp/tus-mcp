@@ -4,7 +4,7 @@
   "app_info": {
     "display_name": "TUS Santander",
     "subtitle": "Santander bus information",
-    "description": "TUS Santander helps users find city bus stops and lines, see the stops served by a line, and check the latest published arrival estimates using official Santander Open Data.",
+    "description": "TUS Santander helps users find city bus stops and lines, map selected stops, see the stops served by a line, and check the latest published arrival estimates using official Santander Open Data.",
     "category": "TRAVEL"
   },
   "tools": {
@@ -55,6 +55,18 @@
         "open_world_justification": "Reads public municipal datasets without changing any external or publicly visible state.",
         "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
       }
+    },
+    "santander_render_bus_stops_map": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only presents bus-stop data supplied to it in an interactive map and does not modify data.",
+        "open_world_justification": "Renders supplied coordinates without changing any external or publicly visible state.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
+      }
     }
   },
   "test_cases": [
@@ -96,6 +108,14 @@
       "file_attachment_urls": null,
       "tools_triggered": "santander_get_bus_line_stops",
       "expected_output": "Returns a clear tool error explaining that the line does not exist in the official dataset.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Render selected Santander bus stops on an interactive map.",
+      "user_prompt": "Find Santander TUS bus stops near the city centre and show them on a map.",
+      "file_attachment_urls": null,
+      "tools_triggered": "santander_get_bus_stops, santander_render_bus_stops_map",
+      "expected_output": "Finds matching stops, then displays the selected stops as clickable pins on an interactive map.",
       "expected_output_url": null
     }
   ],

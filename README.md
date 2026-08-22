@@ -16,6 +16,10 @@ MCP server for Santander's TUS bus data. Every tool reads the official Santander
   - `stopId`: optional public stop number from `paradas_bus["ayto:numero"]`, such as `15`.
   - `lineId`: optional public line number, such as `1` or `24C1`.
   - `limit`: integer from 1 to 100; defaults to 20.
+- `santander_render_bus_stops_map`
+  - Renders up to 100 selected stops as clickable pins in an interactive OpenStreetMap widget.
+  - Call a stop data tool first, then pass each stop's public ID, name, and numeric WGS84 latitude/longitude.
+  - Supports inline and fullscreen display in ChatGPT while leaving the data tools usable in clients without UI support.
 
 The estimates tool preserves the API's exact signed integer values as `arrival_seconds` and `distance_meters`. Empty second-bus values become `null`; they are not presented as inferred arrival states. Each result includes `source_urls` and `fetched_at`, while each estimate includes `observed_at` and `source_modified_at`.
 
@@ -58,11 +62,13 @@ Create a `.env` file:
 ```env
 PORT=3000
 ALLOWED_HOSTS=localhost,127.0.0.1
+WIDGET_DOMAIN=https://localhost
 OPENAI_APPS_CHALLENGE=replace-with-the-value-from-chatgpt
 ```
 
 - `PORT` must be an integer from 1 to 65535.
 - `ALLOWED_HOSTS` is a comma-separated host list. Entries are normalized to lowercase and must not include a protocol, port, or path.
+- `WIDGET_DOMAIN` is the unique HTTPS origin used to isolate the map widget. It defaults to the first `ALLOWED_HOSTS` entry prefixed with `https://`.
 - `OPENAI_APPS_CHALLENGE` is the domain-verification value supplied during ChatGPT app submission. When set, the server returns it as plain text from `/.well-known/openai-apps-challenge`.
 
 The endpoint is public because it only exposes public, read-only Santander Open Data. It does not request or store user data.
@@ -90,7 +96,7 @@ Connect to `http://localhost:3000/mcp`.
 Deploy publicly and set `ALLOWED_HOSTS` to the hostname Cloud Run assigns to the service (without `https://`):
 
 ```bash
-gcloud run deploy tus-mcp --source . --region europe-west1 --allow-unauthenticated --set-env-vars ALLOWED_HOSTS=YOUR_SERVICE_HOSTNAME --project=PROJECT
+gcloud run deploy tus-mcp --source . --region europe-west1 --allow-unauthenticated --set-env-vars ALLOWED_HOSTS=YOUR_SERVICE_HOSTNAME,WIDGET_DOMAIN=https://YOUR_SERVICE_HOSTNAME --project=PROJECT
 ```
 
 The MCP endpoint will be `https://YOUR_SERVICE_HOSTNAME/mcp`.

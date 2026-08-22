@@ -7,6 +7,7 @@ test('serves MCP publicly without authorization', async (t) => {
     const app = createApp({
         port: 3000,
         openaiAppsChallenge: 'test-challenge',
+        widgetDomain: 'https://widgets.example.com',
         allowedHosts: ['127.0.0.1']
     });
     const server = app.listen(0, '127.0.0.1');
