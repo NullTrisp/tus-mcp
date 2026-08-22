@@ -43,4 +43,8 @@
     <question>How should ChatGPT display selected Santander bus stops on an interactive map?</question>
     <answer>First call santander_get_bus_stops or santander_get_bus_line_stops, then pass the selected stops and their numeric WGS84 coordinates to santander_render_bus_stops_map.</answer>
   </qa_pair>
+  <qa_pair>
+    <question>How should ChatGPT display Santander bus lines on an interactive map?</question>
+    <answer>First call santander_get_bus_line_stops for each line, then pass 2–100 WGS84 stops per line to santander_render_bus_lines_map. Stops are grouped by marker color and are not joined because the source does not provide route geometry.</answer>
+  </qa_pair>
 </evaluation>

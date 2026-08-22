@@ -20,6 +20,10 @@ MCP server for Santander's TUS bus data. Every tool reads the official Santander
   - Renders up to 100 selected stops as clickable pins in an interactive OpenStreetMap widget.
   - Call a stop data tool first, then pass each stop's public ID, name, and numeric WGS84 latitude/longitude.
   - Supports inline and fullscreen display in ChatGPT while leaving the data tools usable in clients without UI support.
+- `santander_render_bus_lines_map`
+  - Renders the stops served by up to 10 lines as distinct colored, clickable markers.
+  - Call `santander_get_bus_line_stops` first and pass 2–100 WGS84 stops per line.
+  - Stops are not joined because the source does not provide route geometry.
 
 The estimates tool preserves the API's exact signed integer values as `arrival_seconds` and `distance_meters`. Empty second-bus values become `null`; they are not presented as inferred arrival states. Each result includes `source_urls` and `fetched_at`, while each estimate includes `observed_at` and `source_modified_at`.
 
