@@ -1,69 +1,190 @@
-export interface BusStop {
-    'wgs84_pos:long'?: string;
-    'ayto:coordY_ETRS89'?: string;
-    'ayto:numero'?: string;
-    'gn:coordY'?: string;
-    'gn:coordX'?: string;
-    'ayto:sentido'?: string;
-    'vivo:address1'?: string;
-    'ayto:coordX_ETRS89'?: string;
-    'dc:modified'?: string;
-    'wgs84_pos:lat'?: string;
-    'ayto:parada'?: string;
-    'dc:identifier'?: string;
-    uri?: string;
-    [key: string]: any;
-}
+import * as z from 'zod/v4';
 
-export interface BusLine {
-    'ayto:numero'?: string;
-    'dc:name'?: string;
-    'dc:modified'?: string;
-    'dc:identifier'?: string;
-    uri?: string;
-    [key: string]: any;
-}
+const nonEmptyStringSchema = z.string().min(1);
+const numericStringSchema = z.string().regex(/^-?\d+(?:\.\d+)?$/, 'Expected a numeric string');
+const integerStringSchema = z.string().regex(/^-?\d+$/, 'Expected an integer string');
+const unsignedIntegerStringSchema = z.string().regex(/^\d+$/, 'Expected an unsigned integer string');
+const optionalIntegerStringSchema = z.string().regex(/^(?:-?\d+)?$/, 'Expected an integer string or empty value');
+const coordinateSchema = (minimum: number, maximum: number) => numericStringSchema.refine(
+    (value) => Number(value) >= minimum && Number(value) <= maximum,
+    `Expected a coordinate between ${minimum} and ${maximum}`
+);
+const stopNumberSchema = z.string().trim().regex(/^\d+$/, 'Expected a public stop number').max(10);
+const lineNumberSchema = z.string().trim().min(1).max(50);
+const webUrlSchema = z.url().refine(
+    (value) => ['http:', 'https:'].includes(new URL(value).protocol),
+    'Expected an HTTP(S) URL'
+);
+const httpsUrlSchema = z.url().refine((value) => new URL(value).protocol === 'https:', 'Expected an HTTPS URL');
 
-export interface BusLineStop {
-    'wgs84_pos:long'?: string;
-    'gn:coordY'?: string;
-    'gn:coordX'?: string;
-    'ayto:linea'?: string;
-    'dc:modified'?: string;
-    'wgs84_pos:lat'?: string;
-    'ayto:parada'?: string;
-    'dc:identifier'?: string;
-    uri?: string;
-    [key: string]: any;
-}
+export const busStopSchema = z.object({
+    'wgs84_pos:long': coordinateSchema(-180, 180),
+    'ayto:coordY_ETRS89': numericStringSchema,
+    'ayto:numero': unsignedIntegerStringSchema,
+    'gn:coordY': numericStringSchema,
+    'gn:coordX': numericStringSchema,
+    'ayto:sentido': nonEmptyStringSchema,
+    'vivo:address1': nonEmptyStringSchema,
+    'ayto:coordX_ETRS89': numericStringSchema,
+    'dc:modified': z.iso.datetime(),
+    'wgs84_pos:lat': coordinateSchema(-90, 90),
+    'ayto:parada': nonEmptyStringSchema,
+    'dc:identifier': unsignedIntegerStringSchema,
+    uri: webUrlSchema
+});
 
-export interface BusEstimation {
-    'ayto:tiempo1'?: string;
-    'ayto:distancia2'?: string;
-    'ayto:destino1'?: string;
-    'ayto:distancia1'?: string;
-    'ayto:tiempo2'?: string;
-    'ayto:paradaId'?: string;
-    'ayto:destino2'?: string;
-    'ayto:fechActual'?: string;
-    'dc:modified'?: string;
-    'dc:identifier'?: string;
-    'ayto:etiqLinea'?: string;
-    uri?: string;
-    [key: string]: any;
-}
+export const busLineSchema = z.object({
+    'ayto:numero': nonEmptyStringSchema,
+    'dc:name': nonEmptyStringSchema,
+    'dc:modified': z.iso.datetime(),
+    'dc:identifier': unsignedIntegerStringSchema,
+    uri: webUrlSchema
+});
 
-export interface ApiResponse<T> {
-    summary: {
-        items: number;
-        items_per_page: number;
-        pages: number;
-        current_page: number;
-    };
-    resources: T[];
-}
+export const busLineStopSchema = z.object({
+    'wgs84_pos:long': coordinateSchema(-180, 180),
+    'gn:coordY': numericStringSchema,
+    'gn:coordX': numericStringSchema,
+    'ayto:linea': unsignedIntegerStringSchema,
+    'dc:modified': z.iso.datetime(),
+    'wgs84_pos:lat': coordinateSchema(-90, 90),
+    'ayto:parada': unsignedIntegerStringSchema,
+    'dc:identifier': unsignedIntegerStringSchema,
+    uri: webUrlSchema
+});
 
-export type BusStopsResponse = ApiResponse<BusStop>;
-export type BusLinesResponse = ApiResponse<BusLine>;
-export type BusLineStopsResponse = ApiResponse<BusLineStop>;
-export type BusEstimationsResponse = ApiResponse<BusEstimation>;
+export const busEstimationSchema = z.object({
+    'ayto:tiempo1': integerStringSchema,
+    'ayto:distancia2': optionalIntegerStringSchema,
+    'ayto:destino1': nonEmptyStringSchema,
+    'ayto:distancia1': integerStringSchema,
+    'ayto:tiempo2': optionalIntegerStringSchema,
+    'ayto:paradaId': unsignedIntegerStringSchema,
+    'ayto:destino2': z.string(),
+    'ayto:fechActual': z.iso.datetime(),
+    'dc:modified': z.iso.datetime(),
+    'dc:identifier': unsignedIntegerStringSchema,
+    'ayto:etiqLinea': nonEmptyStringSchema,
+    uri: webUrlSchema
+}).refine((estimation) => {
+    const secondBusFields = [
+        estimation['ayto:destino2'],
+        estimation['ayto:tiempo2'],
+        estimation['ayto:distancia2']
+    ];
+    return secondBusFields.every(Boolean) || secondBusFields.every((value) => value === '');
+}, {
+    message: 'Second-bus destination, time, and distance must be all present or all empty'
+});
+
+export const apiResponseSchema = <T extends z.ZodType>(resourceSchema: T) => z.object({
+    summary: z.object({
+        items: z.number().int().nonnegative(),
+        items_per_page: z.number().int().positive(),
+        pages: z.number().int().nonnegative().max(100),
+        current_page: z.number().int().positive()
+    }),
+    resources: z.array(resourceSchema)
+});
+
+export const busStopsInputSchema = z.object({
+    limit: z.number().int().min(1).max(100)
+        .describe('Maximum number of bus stops to return (1-100)')
+        .default(10),
+    search: z.string().trim().min(1).max(100)
+        .describe('Name, address, public stop number, or API resource ID')
+        .optional()
+});
+
+export const busLinesInputSchema = z.object({
+    search: z.string().trim().min(1).max(100)
+        .describe('Public line number, name, or API resource ID')
+        .optional()
+});
+
+export const busLineStopsInputSchema = z.object({
+    lineId: lineNumberSchema.describe('Public line number from ayto:numero, for example 24C1 or N2')
+});
+
+export const busEstimationsInputSchema = z.object({
+    stopId: stopNumberSchema.describe('Public stop number from ayto:numero, for example 15').optional(),
+    lineId: lineNumberSchema.describe('Public line number from ayto:numero, for example 1 or 24C1').optional(),
+    limit: z.number().int().min(1).max(100)
+        .describe('Maximum number of arrival estimates to return (1-100)')
+        .default(20)
+});
+
+export const busStopLookupInputSchema = z.object({
+    stopId: stopNumberSchema.describe('Public stop number from ayto:numero')
+});
+
+const sourceMetadataShape = {
+    source_urls: z.array(httpsUrlSchema).min(1),
+    fetched_at: z.iso.datetime()
+};
+
+export const busStopsResultSchema = z.object({
+    ...sourceMetadataShape,
+    total_found: z.number().int().nonnegative(),
+    returned: z.number().int().nonnegative(),
+    stops: z.array(busStopSchema)
+}).refine((result) => result.returned === result.stops.length && result.total_found >= result.returned, {
+    message: 'Bus-stop counts do not match the returned resources'
+});
+
+export const busLinesResultSchema = z.object({
+    ...sourceMetadataShape,
+    total_found: z.number().int().nonnegative(),
+    lines: z.array(busLineSchema)
+}).refine((result) => result.total_found === result.lines.length, {
+    message: 'Bus-line count does not match the returned resources'
+});
+
+export const busLineStopsResultSchema = z.object({
+    ...sourceMetadataShape,
+    line: nonEmptyStringSchema,
+    line_id: unsignedIntegerStringSchema,
+    line_name: nonEmptyStringSchema,
+    total_found: z.number().int().nonnegative(),
+    stops: z.array(busLineStopSchema)
+}).refine((result) => result.total_found === result.stops.length, {
+    message: 'Line-stop count does not match the returned resources'
+});
+
+const formattedEstimationSchema = z.object({
+    line: nonEmptyStringSchema,
+    stopId: unsignedIntegerStringSchema,
+    first_bus: z.object({
+        destination: nonEmptyStringSchema,
+        arrival_seconds: z.number().int(),
+        distance_meters: z.number().int()
+    }),
+    second_bus: z.object({
+        destination: z.string().nullable(),
+        arrival_seconds: z.number().int().nullable(),
+        distance_meters: z.number().int().nullable()
+    }),
+    observed_at: z.iso.datetime(),
+    source_modified_at: z.iso.datetime()
+});
+
+export const busEstimationsResultSchema = z.object({
+    ...sourceMetadataShape,
+    filters: z.object({
+        stopId: unsignedIntegerStringSchema.optional(),
+        lineId: nonEmptyStringSchema.optional()
+    }),
+    total_found: z.number().int().nonnegative(),
+    returned: z.number().int().nonnegative(),
+    warnings: z.array(nonEmptyStringSchema),
+    estimations: z.array(formattedEstimationSchema)
+}).refine((result) =>
+    result.returned === result.estimations.length && result.total_found >= result.returned,
+{
+    message: 'Estimation counts do not match the returned resources'
+});
+
+export type BusStop = z.infer<typeof busStopSchema>;
+export type BusLine = z.infer<typeof busLineSchema>;
+export type BusLineStop = z.infer<typeof busLineStopSchema>;
+export type BusEstimation = z.infer<typeof busEstimationSchema>;

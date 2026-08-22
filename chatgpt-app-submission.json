@@ -1,0 +1,128 @@
+{
+  "$schema": "https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
+  "app_info": {
+    "display_name": "TUS Santander",
+    "subtitle": "Santander bus information",
+    "description": "TUS Santander helps users find city bus stops and lines, see the stops served by a line, and check the latest published arrival estimates using official Santander Open Data.",
+    "category": "TRAVEL"
+  },
+  "tools": {
+    "santander_get_bus_stops": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves current bus-stop records from Santander Open Data and does not modify data.",
+        "open_world_justification": "Reads a public municipal dataset without changing any external or publicly visible state.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
+      }
+    },
+    "santander_get_bus_lines": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves current bus-line records from Santander Open Data and does not modify data.",
+        "open_world_justification": "Reads a public municipal dataset without changing any external or publicly visible state.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
+      }
+    },
+    "santander_get_bus_line_stops": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves line and stop relationships from Santander Open Data and does not modify data.",
+        "open_world_justification": "Reads public municipal datasets without changing any external or publicly visible state.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
+      }
+    },
+    "santander_get_bus_estimations": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves published bus-arrival estimates and optional reference data without modifying data.",
+        "open_world_justification": "Reads public municipal datasets without changing any external or publicly visible state.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "description": "Find a Santander bus stop by its public stop number.",
+      "user_prompt": "Find Santander TUS bus stop 15.",
+      "file_attachment_urls": null,
+      "tools_triggered": "santander_get_bus_stops",
+      "expected_output": "Returns stop 15 with its current official name, address, identifiers, and coordinates.",
+      "expected_output_url": null
+    },
+    {
+      "description": "List current Santander bus lines matching a user query.",
+      "user_prompt": "Which Santander bus lines match 24C?",
+      "file_attachment_urls": null,
+      "tools_triggered": "santander_get_bus_lines",
+      "expected_output": "Returns current matching lines with their public line numbers and names.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Retrieve every stop relationship for a valid public line number.",
+      "user_prompt": "Show me all stops served by Santander bus line 24C1.",
+      "file_attachment_urls": null,
+      "tools_triggered": "santander_get_bus_line_stops",
+      "expected_output": "Returns the selected line and all stop relationships published for it.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Check the latest published arrivals for a specific stop and line.",
+      "user_prompt": "When is line 1 arriving at Santander bus stop 15?",
+      "file_attachment_urls": null,
+      "tools_triggered": "santander_get_bus_estimations",
+      "expected_output": "Returns the latest matching arrival estimates with destinations, times, distances, and observation timestamps.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Handle a nonexistent line without fabricating transit information.",
+      "user_prompt": "Show the stops for Santander bus line NOT-A-LINE.",
+      "file_attachment_urls": null,
+      "tools_triggered": "santander_get_bus_line_stops",
+      "expected_output": "Returns a clear tool error explaining that the line does not exist in the official dataset.",
+      "expected_output_url": null
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "description": "Do not trigger for bus information outside Santander.",
+      "user_prompt": "When does the next EMT Madrid bus arrive?",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because it only supports Santander TUS data.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not trigger for unrelated Santander tourism requests.",
+      "user_prompt": "Recommend three seafood restaurants in Santander.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because restaurant recommendations are outside its supported workflows.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not trigger for requests to purchase transport tickets.",
+      "user_prompt": "Buy me a TUS bus ticket for tomorrow.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because it cannot buy tickets or perform transactions.",
+      "expected_output_url": null
+    }
+  ]
+}

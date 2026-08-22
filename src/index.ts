@@ -1,20 +1,22 @@
 import 'dotenv/config';
 import { createApp } from './app.js';
+import { loadConfig } from './config.js';
 
-const app = createApp();
+const config = loadConfig();
+const app = createApp(config);
 
-const PORT = parseInt(process.env.PORT || '3000');
-
-app.listen(PORT, '0.0.0.0', (error?: Error) => {
-    if (error) {
-        console.error('Failed to start server:', error);
-        process.exit(1);
-    }
-    console.log(`MCP Stateless Streamable HTTP Server listening on port ${PORT}`);
+const httpServer = app.listen(config.port, '0.0.0.0');
+httpServer.on('listening', () => {
+    console.log(`MCP Stateless Streamable HTTP Server listening on port ${config.port}`);
+});
+httpServer.on('error', (error) => {
+    console.error('Failed to start server:', error);
+    process.exit(1);
 });
 
-// Handle server shutdown
-process.on('SIGINT', () => {
+const shutdown = () => {
     console.log('Shutting down server...');
-    process.exit(0);
-});
+    httpServer.close((error) => process.exit(error ? 1 : 0));
+};
+process.once('SIGINT', shutdown);
+process.once('SIGTERM', shutdown);

@@ -1,42 +1,42 @@
 <evaluation>
   <qa_pair>
-    <question>What is the name of the bus line with number 1 in Santander?</question>
-    <answer>PCTCAN - SARDINERO</answer>
+    <question>Which field must be used as stopId for santander_get_bus_estimations?</question>
+    <answer>The public stop number in paradas_bus ayto:numero, without an ayto: prefix.</answer>
   </qa_pair>
   <qa_pair>
-    <question>Find the address of the bus stop with identifier "ayto:15".</question>
-    <answer>CALLE CASTILLA 27</answer>
+    <question>Which field must be used as lineId in the bus tools?</question>
+    <answer>The public line number in lineas_bus ayto:numero, for example 24C1 or N2.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How does santander_get_bus_line_stops match a public line number to line-stop relationships?</question>
+    <answer>It validates the public number against lineas_bus, resolves its dc:identifier, and matches that internal ID to lineas_bus_paradas ayto:linea.</answer>
   </qa_pair>
   <qa_pair>
     <question>How many bus stops are returned by default when calling santander_get_bus_stops without a limit?</question>
-    <answer>10</answer>
+    <answer>10.</answer>
   </qa_pair>
   <qa_pair>
-    <question>What is the line number for the 'CIRCULAR 1' line?</question>
-    <answer>C1</answer>
+    <question>What limits are accepted by the bus-stop and estimation tools?</question>
+    <answer>Integers from 1 through 100.</answer>
   </qa_pair>
   <qa_pair>
-    <question>Provide the coordinate latitude for the bus stop at 'Intercambiador del Sardinero' (ID ayto:408).</question>
-    <answer>43.4721453303</answer>
+    <question>How are missing second-bus estimation values represented?</question>
+    <answer>Empty API values are normalized to null; available seconds and meters remain exact signed integers.</answer>
   </qa_pair>
   <qa_pair>
-    <question>Which tool would you use to get real-time arrival estimations for a specific stop?</question>
-    <answer>santander_get_bus_estimations</answer>
+    <question>Does the server return only the first API page?</question>
+    <answer>No. It fetches every declared page and validates completeness and consistency before returning data.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What happens if Santander Open Data returns a malformed resource?</question>
+    <answer>The call fails closed with an error; unvalidated data is not returned.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which protocol is used for all Santander Open Data requests?</question>
+    <answer>HTTPS.</answer>
   </qa_pair>
   <qa_pair>
     <question>What is the prefix used for all bus tools in this server?</question>
-    <answer>santander_</answer>
-  </qa_pair>
-  <qa_pair>
-    <question>Does the bus line number 2 connect to 'CORBÁN'?</question>
-    <answer>Yes</answer>
-  </qa_pair>
-  <qa_pair>
-    <question>What is the identifier format for a bus line used in santander_get_bus_line_stops?</question>
-    <answer>ayto:numero (e.g., ayto:1)</answer>
-  </qa_pair>
-  <qa_pair>
-    <question>What are the possible filters for the santander_get_bus_estimations tool?</question>
-    <answer>stopId and lineId</answer>
+    <answer>santander_.</answer>
   </qa_pair>
 </evaluation>

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "test": "node --import tsx --test src/app.test.ts src/config.test.ts src/services/santander.service.test.ts",
     "start": "node dist/src/index.js",
     "dev": "tsx src/index.ts",
     "inspect": "npx @modelcontextprotocol/inspector",
