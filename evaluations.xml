@@ -83,4 +83,12 @@
     <question>How should ChatGPT display TUeBICI availability on a map?</question>
     <answer>First call santander_get_tuebici_stations, then pass its stations array to santander_render_tuebici_stations_map.</answer>
   </qa_pair>
+  <qa_pair>
+    <question>How do the nearby tools obtain the user's coordinates?</question>
+    <answer>They prefer ChatGPT's optional approximate openai/userLocation request metadata. If it is absent, callers can provide latitude and longitude together as fallback arguments. Coordinates are processed only for the current call and are not logged or persisted.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What defaults and limits apply to nearby searches?</question>
+    <answer>Nearby tools default to 5 results within 1000 meters. Limit accepts 1 through 20 and radiusMeters accepts 50 through 5000.</answer>
+  </qa_pair>
 </evaluation>

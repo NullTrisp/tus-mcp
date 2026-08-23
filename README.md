@@ -8,6 +8,12 @@ MCP server for Santander's TUS bus and TUeBICI data. Tools read the official San
   - `limit`: integer from 1 to 100; defaults to 10.
   - `search`: optional name, address, public stop number, or API resource ID.
   - Exact public stop-number matches are returned first.
+- `santander_get_nearby_bus_stops`
+  - Uses ChatGPT's optional approximate `openai/userLocation` metadata by default.
+  - `latitude` and `longitude`: optional fallback coordinates; provide both or neither.
+  - `radiusMeters`: integer from 50 to 5000; defaults to 1000.
+  - `limit`: integer from 1 to 20; defaults to 5.
+  - Returns stops ordered by `distance_meters`.
 - `santander_get_bus_lines`
   - `search`: optional public line number, name, or API resource ID.
 - `santander_get_bus_line_stops`
@@ -25,11 +31,17 @@ MCP server for Santander's TUS bus and TUeBICI data. Tools read the official San
 - `santander_get_tus_recharge_points`
   - `search`: optional name, address, postcode, town, or vendor type.
   - `limit`: integer from 1 to 100; defaults to 20.
+- `santander_get_nearby_tus_recharge_points`
+  - Uses ChatGPT's optional approximate location metadata and returns recharge points ordered by distance.
+  - Accepts the same coordinate fallback, `radiusMeters`, and `limit` options as the nearby bus-stop tool.
 - `santander_get_tuebici_stations`
   - `search`: optional station name or public short number.
   - `onlyAvailable`: only return stations currently renting with at least one bicycle; defaults to `false`.
   - `limit`: integer from 1 to 100; defaults to 20.
   - Joins station information and availability from the official TUeBICI/Nextbike GBFS feed.
+- `santander_get_nearby_tuebici_stations`
+  - Uses ChatGPT's optional approximate location metadata and returns stations ordered by distance.
+  - Accepts the coordinate fallback, `radiusMeters`, `limit`, and `onlyAvailable`.
 - `santander_render_bus_stops_map`
   - Renders up to 100 selected stops as clickable pins in an interactive OpenStreetMap widget.
   - Call a stop data tool first, then pass each stop's public ID, name, and numeric WGS84 latitude/longitude.
@@ -98,7 +110,7 @@ OPENAI_APPS_CHALLENGE=replace-with-the-value-from-chatgpt
 - `WIDGET_DOMAIN` is the unique HTTPS origin used to isolate the map widget. It defaults to the first `ALLOWED_HOSTS` entry prefixed with `https://`.
 - `OPENAI_APPS_CHALLENGE` is the domain-verification value supplied during ChatGPT app submission. When set, the server returns it as plain text from `/.well-known/openai-apps-challenge`.
 
-The endpoint is public because it only exposes public, read-only Santander Open Data. It does not request or store user data.
+The endpoint is public because it only exposes public, read-only Santander data. It does not persist user location. When ChatGPT provides optional approximate location metadata, the nearby tools process it transiently to calculate distances; the server does not log it or use it for authorization or security decisions.
 
 Run in development or production:
 

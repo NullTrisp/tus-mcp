@@ -10,7 +10,9 @@ import {
     BusPosition,
     BusStop,
     BusVehicle,
-    TusRechargePoint
+    TusRechargePoint,
+    nearbyInputSchema,
+    userLocationSchema
 } from '../types/bus.js';
 
 const TIMESTAMP = '2026-08-22T12:00:00.000Z';
@@ -344,6 +346,79 @@ test('joins TUeBICI station information with current availability', async (conte
     assert.equal(result.source_urls.every((url) => url.startsWith('https://gbfs.nextbike.net/')), true);
 });
 
+test('returns nearby resources within the radius ordered by distance', async (context) => {
+    mockOpenData(context, (url) => {
+        if (url.pathname.endsWith('/paradas_bus.json')) {
+            return page([
+                busStop({ 'ayto:numero': '1', 'dc:identifier': '1' }),
+                busStop({
+                    'ayto:numero': '2',
+                    'dc:identifier': '2',
+                    'wgs84_pos:lat': '43.4800',
+                    uri: 'https://datos.santander.es/recurso/parada/2'
+                })
+            ]);
+        }
+        if (url.pathname.endsWith('/tus_puntos_recarga.json')) {
+            return page([
+                rechargePoint(),
+                rechargePoint({
+                    'dc:title': 'Recarga lejana',
+                    'dc:ubicacion_latitud': '43.4800',
+                    uri: 'https://datos.santander.es/recurso/recarga/lejana'
+                })
+            ]);
+        }
+        if (url.pathname.endsWith('/station_information.json')) {
+            return {
+                last_updated: 1787472976,
+                ttl: 60,
+                data: {
+                    stations: [
+                        { station_id: '1', name: 'Centro', lat: 43.46, lon: -3.8, capacity: 10 },
+                        { station_id: '2', name: 'Lejana', lat: 43.48, lon: -3.8, capacity: 10 }
+                    ]
+                }
+            };
+        }
+        if (url.pathname.endsWith('/station_status.json')) {
+            return {
+                last_updated: 1787472975,
+                ttl: 60,
+                data: {
+                    stations: [
+                        { station_id: '1', num_bikes_available: 2, num_docks_available: 8, is_installed: true, is_renting: true, is_returning: true, last_reported: 1787472975 },
+                        { station_id: '2', num_bikes_available: 2, num_docks_available: 8, is_installed: true, is_renting: true, is_returning: true, last_reported: 1787472975 }
+                    ]
+                }
+            };
+        }
+        throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const busStops = await SantanderBusService.getNearbyBusStops(43.46, -3.8, 5, 1000);
+    const rechargePoints = await SantanderBusService.getNearbyTusRechargePoints(43.46, -3.8, 5, 1000);
+    const stations = await SantanderBusService.getNearbyTuebiciStations(43.46, -3.8, 5, 1000, true);
+
+    assert.deepEqual(busStops.stops.map((stop) => [stop['ayto:numero'], stop.distance_meters]), [['1', 0]]);
+    assert.deepEqual(rechargePoints.points.map((point) => [point.name, point.distance_meters]), [['Recarga Centro', 0]]);
+    assert.deepEqual(stations.stations.map((station) => [station.name, station.distance_meters]), [['Centro', 0]]);
+});
+
+test('accepts fallback coordinates only as a complete pair', () => {
+    assert.deepEqual(nearbyInputSchema.parse({ latitude: 43.46, longitude: -3.8 }), {
+        latitude: 43.46,
+        longitude: -3.8,
+        limit: 5,
+        radiusMeters: 1000
+    });
+    assert.throws(() => nearbyInputSchema.parse({ latitude: 43.46 }), ZodError);
+    assert.deepEqual(userLocationSchema.parse({ latitude: '43.46', longitude: '-3.8' }), {
+        latitude: 43.46,
+        longitude: -3.8
+    });
+});
+
 test('prioritizes public stop number 15 over a colliding API resource ID', async (context) => {
     const resourceIdMatch = busStop({
         'ayto:numero': '48',
@@ -445,6 +520,9 @@ test('rejects invalid inputs and limits before contacting Open Data', async (con
         ['invalid recharge limit', () => SantanderBusService.getTusRechargePoints(0)],
         ['blank TUeBICI search', () => SantanderBusService.getTuebiciStations(20, '   ')],
         ['invalid TUeBICI limit', () => SantanderBusService.getTuebiciStations(0)],
+        ['invalid nearby latitude', () => SantanderBusService.getNearbyBusStops(91, -3.8)],
+        ['invalid nearby radius', () => SantanderBusService.getNearbyTusRechargePoints(43.46, -3.8, 5, 49)],
+        ['invalid nearby limit', () => SantanderBusService.getNearbyTuebiciStations(43.46, -3.8, 21)],
         ['invalid estimation stop', () => SantanderBusService.getBusEstimations('stop-15')],
         ['blank estimation line', () => SantanderBusService.getBusEstimations(undefined, '   ')],
         ['zero estimation limit', () => SantanderBusService.getBusEstimations(undefined, undefined, 0)],

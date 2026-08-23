@@ -26,6 +26,12 @@ import {
     tuebiciStationsInputSchema,
     tuebiciStationsResultSchema,
     tuebiciStationStatusResponseSchema,
+    nearbyInputSchema,
+    nearbyTuebiciInputSchema,
+    nearbyBusStopsResultSchema,
+    nearbyTusRechargePointsResultSchema,
+    nearbyTuebiciStationsResultSchema,
+    userLocationSchema,
     BusLine,
     BusPosition,
     BusStop,
@@ -34,6 +40,31 @@ import {
 
 const DATASET_PAGE_SIZE = 1000;
 const REQUEST_TIMEOUT_MS = 15_000;
+const EARTH_RADIUS_METERS = 6_371_000;
+
+function rankNearby<T extends object>(
+    items: T[],
+    coordinates: (item: T) => { latitude: number; longitude: number },
+    origin: { latitude: number; longitude: number },
+    radiusMeters: number,
+    limit: number
+) {
+    const radians = (degrees: number) => degrees * Math.PI / 180;
+    const ranked = items.map((item) => {
+        const destination = coordinates(item);
+        const latitudeDelta = radians(destination.latitude - origin.latitude);
+        const longitudeDelta = radians(destination.longitude - origin.longitude);
+        const firstLatitude = radians(origin.latitude);
+        const secondLatitude = radians(destination.latitude);
+        const haversine = Math.sin(latitudeDelta / 2) ** 2
+            + Math.cos(firstLatitude) * Math.cos(secondLatitude) * Math.sin(longitudeDelta / 2) ** 2;
+        const distanceMeters = Math.round(2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(Math.min(1, haversine))));
+        return { ...item, distance_meters: distanceMeters };
+    }).filter((item) => item.distance_meters <= radiusMeters)
+        .sort((first, second) => first.distance_meters - second.distance_meters);
+
+    return { total: ranked.length, items: ranked.slice(0, limit) };
+}
 
 type DatasetName =
     | 'paradas_bus'
@@ -204,6 +235,36 @@ export class SantanderBusService {
             total_found: stops.length,
             returned: limitedStops.length,
             stops: limitedStops
+        });
+    }
+
+    static async getNearbyBusStops(
+        latitude: number,
+        longitude: number,
+        limit: number = 5,
+        radiusMeters: number = 1000
+    ) {
+        const origin = userLocationSchema.parse({ latitude, longitude });
+        const input = nearbyInputSchema.parse({ limit, radiusMeters });
+        const stops = await this.fetchDataset('paradas_bus', busStopSchema);
+        const nearby = rankNearby(
+            stops,
+            (stop) => ({
+                latitude: Number(stop['wgs84_pos:lat']),
+                longitude: Number(stop['wgs84_pos:long'])
+            }),
+            origin,
+            input.radiusMeters,
+            input.limit
+        );
+
+        return nearbyBusStopsResultSchema.parse({
+            source_urls: [this.datasetUrl('paradas_bus')],
+            fetched_at: new Date().toISOString(),
+            radius_meters: input.radiusMeters,
+            total_found: nearby.total,
+            returned: nearby.items.length,
+            stops: nearby.items
         });
     }
 
@@ -414,15 +475,51 @@ export class SantanderBusService {
         });
     }
 
-    static async getTuebiciStations(limit: number = 20, search?: string, onlyAvailable: boolean = false) {
-        const input = tuebiciStationsInputSchema.parse({ limit, search, onlyAvailable });
+    static async getNearbyTusRechargePoints(
+        latitude: number,
+        longitude: number,
+        limit: number = 5,
+        radiusMeters: number = 1000
+    ) {
+        const origin = userLocationSchema.parse({ latitude, longitude });
+        const input = nearbyInputSchema.parse({ limit, radiusMeters });
+        const points = (await this.fetchDataset('tus_puntos_recarga', tusRechargePointSchema)).map((point) => ({
+            name: point['dc:title'],
+            vendor_type: point['dc:tipo_expendedor'],
+            address: point['dc:ubicacion_calle'],
+            postcode: point['dc:ubicacion_codigo_postal'],
+            town: point['dc:ubicacion_poblacion'],
+            province: point['dc:ubicacion_provincia'],
+            latitude: Number(point['dc:ubicacion_latitud']),
+            longitude: Number(point['dc:ubicacion_longitud']),
+            source_modified_at: point['dc:modified']
+        }));
+        const nearby = rankNearby(
+            points,
+            (point) => ({ latitude: point.latitude, longitude: point.longitude }),
+            origin,
+            input.radiusMeters,
+            input.limit
+        );
+
+        return nearbyTusRechargePointsResultSchema.parse({
+            source_urls: [this.datasetUrl('tus_puntos_recarga')],
+            fetched_at: new Date().toISOString(),
+            radius_meters: input.radiusMeters,
+            total_found: nearby.total,
+            returned: nearby.items.length,
+            points: nearby.items
+        });
+    }
+
+    private static async getTuebiciFeed() {
         const [information, availability] = await Promise.all([
             this.fetchGbfs(this.TUEBICI_STATION_INFORMATION_URL, tuebiciStationInformationResponseSchema),
             this.fetchGbfs(this.TUEBICI_STATION_STATUS_URL, tuebiciStationStatusResponseSchema)
         ]);
         const statusById = new Map(availability.data.stations.map((status) => [status.station_id, status]));
         const warnings: string[] = [];
-        let stations = information.data.stations.map((station) => {
+        const stations = information.data.stations.map((station) => {
             const status = statusById.get(station.station_id);
             if (!status) warnings.push(`Station ${station.station_id} has no current availability record.`);
             return {
@@ -441,6 +538,20 @@ export class SantanderBusService {
                 ...(station.rental_uris?.web && { rental_url: station.rental_uris.web })
             };
         });
+
+        return {
+            source_urls: [this.TUEBICI_STATION_INFORMATION_URL, this.TUEBICI_STATION_STATUS_URL],
+            fetched_at: new Date().toISOString(),
+            feed_updated_at: new Date(Math.min(information.last_updated, availability.last_updated) * 1000).toISOString(),
+            warnings,
+            stations
+        };
+    }
+
+    static async getTuebiciStations(limit: number = 20, search?: string, onlyAvailable: boolean = false) {
+        const input = tuebiciStationsInputSchema.parse({ limit, search, onlyAvailable });
+        const feed = await this.getTuebiciFeed();
+        let stations = feed.stations;
         if (input.search) {
             const term = input.search.toLowerCase();
             stations = stations.filter((station) =>
@@ -456,17 +567,51 @@ export class SantanderBusService {
         const limitedStations = stations.slice(0, input.limit);
 
         return tuebiciStationsResultSchema.parse({
-            source_urls: [this.TUEBICI_STATION_INFORMATION_URL, this.TUEBICI_STATION_STATUS_URL],
-            fetched_at: new Date().toISOString(),
-            feed_updated_at: new Date(Math.min(information.last_updated, availability.last_updated) * 1000).toISOString(),
+            source_urls: feed.source_urls,
+            fetched_at: feed.fetched_at,
+            feed_updated_at: feed.feed_updated_at,
             filters: {
                 ...(input.search && { search: input.search }),
                 onlyAvailable: input.onlyAvailable
             },
             total_found: stations.length,
             returned: limitedStations.length,
-            warnings,
+            warnings: feed.warnings,
             stations: limitedStations
+        });
+    }
+
+    static async getNearbyTuebiciStations(
+        latitude: number,
+        longitude: number,
+        limit: number = 5,
+        radiusMeters: number = 1000,
+        onlyAvailable: boolean = false
+    ) {
+        const origin = userLocationSchema.parse({ latitude, longitude });
+        const input = nearbyTuebiciInputSchema.parse({ limit, radiusMeters, onlyAvailable });
+        const feed = await this.getTuebiciFeed();
+        const stations = input.onlyAvailable
+            ? feed.stations.filter((station) => station.is_renting && (station.bikes_available ?? 0) > 0)
+            : feed.stations;
+        const nearby = rankNearby(
+            stations,
+            (station) => ({ latitude: station.latitude, longitude: station.longitude }),
+            origin,
+            input.radiusMeters,
+            input.limit
+        );
+
+        return nearbyTuebiciStationsResultSchema.parse({
+            source_urls: feed.source_urls,
+            fetched_at: feed.fetched_at,
+            feed_updated_at: feed.feed_updated_at,
+            radius_meters: input.radiusMeters,
+            only_available: input.onlyAvailable,
+            total_found: nearby.total,
+            returned: nearby.items.length,
+            warnings: feed.warnings,
+            stations: nearby.items
         });
     }
 

@@ -15,7 +15,13 @@ import {
     tusRechargePointsInputSchema,
     tusRechargePointsResultSchema,
     tuebiciStationsInputSchema,
-    tuebiciStationsResultSchema
+    tuebiciStationsResultSchema,
+    nearbyInputSchema,
+    nearbyTuebiciInputSchema,
+    nearbyBusStopsResultSchema,
+    nearbyTusRechargePointsResultSchema,
+    nearbyTuebiciStationsResultSchema,
+    userLocationSchema
 } from '../types/bus.js';
 
 const readOnlyAnnotations = {
@@ -53,6 +59,16 @@ function errorResult(action: string, error: unknown): CallToolResult {
     };
 }
 
+function userLocation(meta: Record<string, unknown> | undefined, latitude?: number, longitude?: number) {
+    const parsed = userLocationSchema.safeParse(
+        latitude === undefined ? meta?.['openai/userLocation'] : { latitude, longitude }
+    );
+    if (!parsed.success) {
+        throw new Error('Location is unavailable. Allow ChatGPT location access or provide latitude and longitude.');
+    }
+    return parsed.data;
+}
+
 export function registerTools(server: McpServer) {
     server.registerTool(
         'santander_get_bus_stops',
@@ -72,6 +88,34 @@ export function registerTools(server: McpServer) {
                 );
             } catch (error: unknown) {
                 return errorResult('fetch bus stops from Santander Open Data', error);
+            }
+        }
+    );
+
+    server.registerTool(
+        'santander_get_nearby_bus_stops',
+        {
+            description: 'Find Santander bus stops nearest to the user\'s current approximate location.',
+            inputSchema: nearbyInputSchema,
+            outputSchema: nearbyBusStopsResultSchema,
+            annotations: readOnlyAnnotations
+        },
+        async ({ limit, radiusMeters, latitude, longitude }, { _meta }): Promise<CallToolResult> => {
+            try {
+                const location = userLocation(_meta, latitude, longitude);
+                const result = await SantanderBusService.getNearbyBusStops(
+                    location.latitude,
+                    location.longitude,
+                    limit,
+                    radiusMeters
+                );
+                return successResult(
+                    `Found ${result.total_found} bus stops within ${result.radius_meters} meters; returned ${result.returned}.`,
+                    `santander://bus/stops/nearby?radius=${result.radius_meters}`,
+                    result
+                );
+            } catch (error: unknown) {
+                return errorResult('find nearby Santander bus stops', error);
             }
         }
     );
@@ -192,6 +236,34 @@ export function registerTools(server: McpServer) {
     );
 
     server.registerTool(
+        'santander_get_nearby_tus_recharge_points',
+        {
+            description: 'Find official TUS card sale and recharge points nearest to the user\'s current approximate location.',
+            inputSchema: nearbyInputSchema,
+            outputSchema: nearbyTusRechargePointsResultSchema,
+            annotations: readOnlyAnnotations
+        },
+        async ({ limit, radiusMeters, latitude, longitude }, { _meta }): Promise<CallToolResult> => {
+            try {
+                const location = userLocation(_meta, latitude, longitude);
+                const result = await SantanderBusService.getNearbyTusRechargePoints(
+                    location.latitude,
+                    location.longitude,
+                    limit,
+                    radiusMeters
+                );
+                return successResult(
+                    `Found ${result.total_found} TUS recharge points within ${result.radius_meters} meters; returned ${result.returned}.`,
+                    `santander://tus/recharge-points/nearby?radius=${result.radius_meters}`,
+                    result
+                );
+            } catch (error: unknown) {
+                return errorResult('find nearby TUS recharge points', error);
+            }
+        }
+    );
+
+    server.registerTool(
         'santander_get_tuebici_stations',
         {
             description: 'Get current TUeBICI electric-bike stations and availability from the official operator GBFS feed.',
@@ -209,6 +281,35 @@ export function registerTools(server: McpServer) {
                 );
             } catch (error: unknown) {
                 return errorResult('fetch TUeBICI stations and availability', error);
+            }
+        }
+    );
+
+    server.registerTool(
+        'santander_get_nearby_tuebici_stations',
+        {
+            description: 'Find TUeBICI stations nearest to the user\'s current approximate location, with current availability.',
+            inputSchema: nearbyTuebiciInputSchema,
+            outputSchema: nearbyTuebiciStationsResultSchema,
+            annotations: readOnlyAnnotations
+        },
+        async ({ limit, radiusMeters, latitude, longitude, onlyAvailable }, { _meta }): Promise<CallToolResult> => {
+            try {
+                const location = userLocation(_meta, latitude, longitude);
+                const result = await SantanderBusService.getNearbyTuebiciStations(
+                    location.latitude,
+                    location.longitude,
+                    limit,
+                    radiusMeters,
+                    onlyAvailable
+                );
+                return successResult(
+                    `Found ${result.total_found} TUeBICI stations within ${result.radius_meters} meters; returned ${result.returned}.`,
+                    `santander://tuebici/stations/nearby?radius=${result.radius_meters}`,
+                    result
+                );
+            } catch (error: unknown) {
+                return errorResult('find nearby TUeBICI stations', error);
             }
         }
     );

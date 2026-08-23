@@ -9,6 +9,8 @@ const coordinateSchema = (minimum: number, maximum: number) => numericStringSche
     (value) => Number(value) >= minimum && Number(value) <= maximum,
     `Expected a coordinate between ${minimum} and ${maximum}`
 );
+const flexibleCoordinateSchema = (minimum: number, maximum: number) =>
+    z.union([z.number(), numericStringSchema]).transform(Number).pipe(z.number().min(minimum).max(maximum));
 const stopNumberSchema = z.string().trim().regex(/^\d+$/, 'Expected a public stop number').max(10);
 const lineNumberSchema = z.string().trim().min(1).max(50);
 const webUrlSchema = z.url().refine(
@@ -222,6 +224,34 @@ export const tuebiciStationsInputSchema = z.object({
         .default(20)
 });
 
+export const nearbyInputSchema = z.object({
+    limit: z.number().int().min(1).max(20)
+        .describe('Maximum number of nearby results to return (1-20)')
+        .default(5),
+    radiusMeters: z.number().int().min(50).max(5000)
+        .describe('Maximum distance from the user in meters (50-5000)')
+        .default(1000),
+    latitude: z.number().min(-90).max(90)
+        .describe('Optional latitude fallback when ChatGPT does not provide location metadata')
+        .optional(),
+    longitude: z.number().min(-180).max(180)
+        .describe('Optional longitude fallback when ChatGPT does not provide location metadata')
+        .optional()
+}).refine((input) => (input.latitude === undefined) === (input.longitude === undefined), {
+    message: 'latitude and longitude must be provided together'
+});
+
+export const userLocationSchema = z.object({
+    latitude: flexibleCoordinateSchema(-90, 90),
+    longitude: flexibleCoordinateSchema(-180, 180)
+});
+
+export const nearbyTuebiciInputSchema = nearbyInputSchema.extend({
+    onlyAvailable: z.boolean()
+        .describe('Only return stations currently renting with at least one bike')
+        .default(false)
+});
+
 export const busEstimationsInputSchema = z.object({
     stopId: stopNumberSchema.describe('Public stop number from ayto:numero, for example 15').optional(),
     lineId: lineNumberSchema.describe('Public line number from ayto:numero, for example 1 or 24C1').optional(),
@@ -319,23 +349,41 @@ export const recentBusPositionsResultSchema = z.object({
     message: 'Bus-position count does not match the returned resources'
 });
 
+const tusRechargePointResultSchema = z.object({
+    name: nonEmptyStringSchema,
+    vendor_type: z.string(),
+    address: z.string(),
+    postcode: z.string(),
+    town: z.string(),
+    province: z.string(),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    source_modified_at: z.iso.datetime()
+});
+
 export const tusRechargePointsResultSchema = z.object({
     ...sourceMetadataShape,
     total_found: z.number().int().nonnegative(),
     returned: z.number().int().nonnegative(),
-    points: z.array(z.object({
-        name: nonEmptyStringSchema,
-        vendor_type: z.string(),
-        address: z.string(),
-        postcode: z.string(),
-        town: z.string(),
-        province: z.string(),
-        latitude: z.number().min(-90).max(90),
-        longitude: z.number().min(-180).max(180),
-        source_modified_at: z.iso.datetime()
-    }))
+    points: z.array(tusRechargePointResultSchema)
 }).refine((result) => result.returned === result.points.length && result.total_found >= result.returned, {
     message: 'Recharge-point counts do not match the returned resources'
+});
+
+const tuebiciStationResultSchema = z.object({
+    stationId: nonEmptyStringSchema,
+    short_name: z.string().optional(),
+    name: nonEmptyStringSchema,
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    capacity: z.number().int().nonnegative(),
+    bikes_available: z.number().int().nonnegative().nullable(),
+    docks_available: z.number().int().nonnegative().nullable(),
+    is_installed: z.boolean().nullable(),
+    is_renting: z.boolean().nullable(),
+    is_returning: z.boolean().nullable(),
+    last_reported_at: z.iso.datetime().nullable(),
+    rental_url: httpsUrlSchema.optional()
 });
 
 export const tuebiciStationsResultSchema = z.object({
@@ -348,23 +396,40 @@ export const tuebiciStationsResultSchema = z.object({
     total_found: z.number().int().nonnegative(),
     returned: z.number().int().nonnegative(),
     warnings: z.array(nonEmptyStringSchema),
-    stations: z.array(z.object({
-        stationId: nonEmptyStringSchema,
-        short_name: z.string().optional(),
-        name: nonEmptyStringSchema,
-        latitude: z.number().min(-90).max(90),
-        longitude: z.number().min(-180).max(180),
-        capacity: z.number().int().nonnegative(),
-        bikes_available: z.number().int().nonnegative().nullable(),
-        docks_available: z.number().int().nonnegative().nullable(),
-        is_installed: z.boolean().nullable(),
-        is_renting: z.boolean().nullable(),
-        is_returning: z.boolean().nullable(),
-        last_reported_at: z.iso.datetime().nullable(),
-        rental_url: httpsUrlSchema.optional()
-    }))
+    stations: z.array(tuebiciStationResultSchema)
 }).refine((result) => result.returned === result.stations.length && result.total_found >= result.returned, {
     message: 'TUeBICI station counts do not match the returned resources'
+});
+
+const nearbyResultShape = {
+    ...sourceMetadataShape,
+    radius_meters: z.number().int().min(50).max(5000),
+    total_found: z.number().int().nonnegative(),
+    returned: z.number().int().nonnegative()
+};
+
+export const nearbyBusStopsResultSchema = z.object({
+    ...nearbyResultShape,
+    stops: z.array(busStopSchema.extend({ distance_meters: z.number().int().nonnegative() }))
+}).refine((result) => result.returned === result.stops.length && result.total_found >= result.returned, {
+    message: 'Nearby bus-stop counts do not match the returned resources'
+});
+
+export const nearbyTusRechargePointsResultSchema = z.object({
+    ...nearbyResultShape,
+    points: z.array(tusRechargePointResultSchema.extend({ distance_meters: z.number().int().nonnegative() }))
+}).refine((result) => result.returned === result.points.length && result.total_found >= result.returned, {
+    message: 'Nearby recharge-point counts do not match the returned resources'
+});
+
+export const nearbyTuebiciStationsResultSchema = z.object({
+    ...nearbyResultShape,
+    feed_updated_at: z.iso.datetime(),
+    only_available: z.boolean(),
+    warnings: z.array(nonEmptyStringSchema),
+    stations: z.array(tuebiciStationResultSchema.extend({ distance_meters: z.number().int().nonnegative() }))
+}).refine((result) => result.returned === result.stations.length && result.total_found >= result.returned, {
+    message: 'Nearby TUeBICI station counts do not match the returned resources'
 });
 
 const formattedEstimationSchema = z.object({
