@@ -155,27 +155,11 @@
   },
   "test_cases": [
     {
-      "description": "Find a Santander bus stop by its public stop number.",
-      "user_prompt": "Find Santander TUS bus stop 15.",
+      "description": "Find a Santander bus stop by its public stop number and render it.",
+      "user_prompt": "Find Santander TUS bus stop 15 and show it on a map.",
       "file_attachment_urls": null,
-      "tools_triggered": "santander_get_bus_stops",
-      "expected_output": "Returns stop 15 with its current official name, address, identifiers, and coordinates.",
-      "expected_output_url": null
-    },
-    {
-      "description": "List current Santander bus lines matching a user query.",
-      "user_prompt": "Which Santander bus lines match 24C?",
-      "file_attachment_urls": null,
-      "tools_triggered": "santander_get_bus_lines",
-      "expected_output": "Returns current matching lines with their public line numbers and names.",
-      "expected_output_url": null
-    },
-    {
-      "description": "Retrieve every stop relationship for a valid public line number.",
-      "user_prompt": "Show me all stops served by Santander bus line 24C1.",
-      "file_attachment_urls": null,
-      "tools_triggered": "santander_get_bus_line_stops",
-      "expected_output": "Returns the selected line, all raw stop relationships, and its ordered, named, georeferenced route variants.",
+      "tools_triggered": "santander_get_bus_stops, santander_render_bus_stops_map",
+      "expected_output": "Returns stop 15 with its current official details and displays it as a clickable pin on an interactive map.",
       "expected_output_url": null
     },
     {
@@ -195,22 +179,6 @@
       "expected_output_url": null
     },
     {
-      "description": "Render selected Santander bus stops on an interactive map.",
-      "user_prompt": "Find Santander TUS bus stops near the city centre and show them on a map.",
-      "file_attachment_urls": null,
-      "tools_triggered": "santander_get_bus_stops, santander_render_bus_stops_map",
-      "expected_output": "Finds matching stops, then displays the selected stops as clickable pins on an interactive map.",
-      "expected_output_url": null
-    },
-    {
-      "description": "Render a Santander bus line on an interactive map.",
-      "user_prompt": "Show Santander bus line 1 on a map.",
-      "file_attachment_urls": null,
-      "tools_triggered": "santander_get_bus_line_stops, santander_render_bus_lines_map",
-      "expected_output": "Retrieves the ordered route variants, then displays their stops and dashed schematic sequences grouped by line color.",
-      "expected_output_url": null
-    },
-    {
       "description": "Find and render recently observed Santander buses.",
       "user_prompt": "Where are the active buses on Santander line 1 right now? Show them on a map.",
       "file_attachment_urls": null,
@@ -219,19 +187,11 @@
       "expected_output_url": null
     },
     {
-      "description": "Find a TUS card recharge point.",
-      "user_prompt": "Where can I recharge my TUS card near the Sardinero?",
+      "description": "Compare nearby TUS recharge points and available TUeBICI stations.",
+      "user_prompt": "Show TUS recharge points near the Sardinero and TUeBICI stations that have bicycles available right now.",
       "file_attachment_urls": null,
-      "tools_triggered": "santander_get_tus_recharge_points, santander_render_tus_recharge_points_map",
-      "expected_output": "Returns matching official TUS sale or recharge points, then displays them as clickable markers on an interactive map.",
-      "expected_output_url": null
-    },
-    {
-      "description": "Find available TUeBICI stations and render them.",
-      "user_prompt": "Show TUeBICI stations with bicycles available right now on a map.",
-      "file_attachment_urls": null,
-      "tools_triggered": "santander_get_tuebici_stations, santander_render_tuebici_stations_map",
-      "expected_output": "Returns current stations with at least one available bicycle and displays their availability on an interactive map.",
+      "tools_triggered": "santander_get_tus_recharge_points, santander_render_tus_recharge_points_map, santander_get_tuebici_stations, santander_render_tuebici_stations_map",
+      "expected_output": "Returns matching official recharge points and currently available TUeBICI stations, displaying each result set on its interactive map.",
       "expected_output_url": null
     }
   ],
