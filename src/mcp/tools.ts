@@ -9,7 +9,11 @@ import {
     busLineStopsInputSchema,
     busLineStopsResultSchema,
     busStopsInputSchema,
-    busStopsResultSchema
+    busStopsResultSchema,
+    recentBusPositionsInputSchema,
+    recentBusPositionsResultSchema,
+    tusRechargePointsInputSchema,
+    tusRechargePointsResultSchema
 } from '../types/bus.js';
 
 const readOnlyAnnotations = {
@@ -104,7 +108,7 @@ export function registerTools(server: McpServer) {
             try {
                 const result = await SantanderBusService.getBusLineStops(lineId);
                 return successResult(
-                    `Line ${result.line} (${result.line_name}) serves ${result.total_found} stop relationships.`,
+                    `Line ${result.line} (${result.line_name}) serves ${result.total_found} stop relationships across ${result.routes.length} ordered routes.`,
                     `santander://bus/line/${encodeURIComponent(result.line)}/stops`,
                     result
                 );
@@ -137,6 +141,50 @@ export function registerTools(server: McpServer) {
                 );
             } catch (error: unknown) {
                 return errorResult('fetch bus arrival estimates from Santander Open Data', error);
+            }
+        }
+    );
+
+    server.registerTool(
+        'santander_get_recent_bus_positions',
+        {
+            description: 'Get the most recent published position of each active Santander bus, optionally filtered by public line number. Vehicle capacity and fuel data are included when available.',
+            inputSchema: recentBusPositionsInputSchema,
+            outputSchema: recentBusPositionsResultSchema,
+            annotations: readOnlyAnnotations
+        },
+        async ({ lineId, maxAgeMinutes }): Promise<CallToolResult> => {
+            try {
+                const result = await SantanderBusService.getRecentBusPositions(lineId, maxAgeMinutes);
+                return successResult(
+                    `Found ${result.returned} buses from ${result.total_observations} position observations published within the last ${result.filters.maxAgeMinutes} minutes.`,
+                    `santander://bus/positions${result.filters.lineId ? `?line=${encodeURIComponent(result.filters.lineId)}` : ''}`,
+                    result
+                );
+            } catch (error: unknown) {
+                return errorResult('fetch recent bus positions from Santander Open Data', error);
+            }
+        }
+    );
+
+    server.registerTool(
+        'santander_get_tus_recharge_points',
+        {
+            description: 'Find official TUS card sale and recharge points by name, address, postcode, town, or vendor type.',
+            inputSchema: tusRechargePointsInputSchema,
+            outputSchema: tusRechargePointsResultSchema,
+            annotations: readOnlyAnnotations
+        },
+        async ({ limit, search }): Promise<CallToolResult> => {
+            try {
+                const result = await SantanderBusService.getTusRechargePoints(limit, search);
+                return successResult(
+                    `Found ${result.total_found} matching TUS recharge points; returned ${result.returned}.`,
+                    'santander://tus/recharge-points',
+                    result
+                );
+            } catch (error: unknown) {
+                return errorResult('fetch TUS recharge points from Santander Open Data', error);
             }
         }
     );

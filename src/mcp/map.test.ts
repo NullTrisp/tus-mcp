@@ -18,17 +18,23 @@ test('registers the bus map resource and returns renderable stop and line data',
     const tools = await client.listTools();
     const mapTool = tools.tools.find((tool) => tool.name === 'santander_render_bus_stops_map');
     const linesMapTool = tools.tools.find((tool) => tool.name === 'santander_render_bus_lines_map');
+    const positionsMapTool = tools.tools.find((tool) => tool.name === 'santander_render_bus_positions_map');
+    const rechargeMapTool = tools.tools.find((tool) => tool.name === 'santander_render_tus_recharge_points_map');
     const uiMetadata = mapTool?._meta?.ui as { resourceUri?: string } | undefined;
     const linesUiMetadata = linesMapTool?._meta?.ui as { resourceUri?: string } | undefined;
-    assert.equal(uiMetadata?.resourceUri, 'ui://santander/bus-map-v4.html');
-    assert.equal(linesUiMetadata?.resourceUri, 'ui://santander/bus-map-v4.html');
+    const positionsUiMetadata = positionsMapTool?._meta?.ui as { resourceUri?: string } | undefined;
+    const rechargeUiMetadata = rechargeMapTool?._meta?.ui as { resourceUri?: string } | undefined;
+    assert.equal(uiMetadata?.resourceUri, 'ui://santander/bus-map-v6.html');
+    assert.equal(linesUiMetadata?.resourceUri, 'ui://santander/bus-map-v6.html');
+    assert.equal(positionsUiMetadata?.resourceUri, 'ui://santander/bus-map-v6.html');
+    assert.equal(rechargeUiMetadata?.resourceUri, 'ui://santander/bus-map-v6.html');
 
-    const resource = await client.readResource({ uri: 'ui://santander/bus-map-v4.html' });
+    const resource = await client.readResource({ uri: 'ui://santander/bus-map-v6.html' });
     assert.equal(resource.contents[0]?.mimeType, 'text/html;profile=mcp-app');
     const resourceMetadata = resource.contents[0]?._meta?.ui as { domain?: string } | undefined;
     assert.equal(resourceMetadata?.domain, 'https://widgets.example.com');
     assert.match('text' in resource.contents[0]! ? resource.contents[0].text : '', /OpenStreetMap/);
-    assert.doesNotMatch('text' in resource.contents[0]! ? resource.contents[0].text : '', /L\.polyline/);
+    assert.match('text' in resource.contents[0]! ? resource.contents[0].text : '', /L\.polyline/);
 
     const result = await client.callTool({
         name: 'santander_render_bus_stops_map',
@@ -59,10 +65,15 @@ test('registers the bus map resource and returns renderable stop and line data',
             lines: [{
                 id: '1',
                 name: 'Test route',
-                stops: [
-                    { id: '15', latitude: 43.4623, longitude: -3.8099 },
-                    { id: '16', latitude: 43.465, longitude: -3.805 }
-                ]
+                routes: [{
+                    route_id: '10',
+                    direction: '1',
+                    name: 'Outbound',
+                    stops: [
+                        { stopId: '15', name: 'First', sequence: 1, distance_meters: 0, latitude: 43.4623, longitude: -3.8099 },
+                        { stopId: '16', name: 'Second', sequence: 2, distance_meters: 500, latitude: 43.465, longitude: -3.805 }
+                    ]
+                }]
             }]
         }
     });
@@ -71,10 +82,73 @@ test('registers the bus map resource and returns renderable stop and line data',
         lines: [{
             id: '1',
             name: 'Test route',
-            stops: [
-                { id: '15', latitude: 43.4623, longitude: -3.8099 },
-                { id: '16', latitude: 43.465, longitude: -3.805 }
-            ]
+            routes: [{
+                route_id: '10',
+                direction: '1',
+                name: 'Outbound',
+                stops: [
+                    { stopId: '15', name: 'First', sequence: 1, distance_meters: 0, latitude: 43.4623, longitude: -3.8099 },
+                    { stopId: '16', name: 'Second', sequence: 2, distance_meters: 500, latitude: 43.465, longitude: -3.805 }
+                ]
+            }]
+        }]
+    });
+
+    const positionsResult = await client.callTool({
+        name: 'santander_render_bus_positions_map',
+        arguments: {
+            title: 'Recent buses',
+            positions: [{
+                vehicleId: '9001',
+                line: '1',
+                line_name: 'Centro',
+                latitude: 43.4623,
+                longitude: -3.8099,
+                speed_kmh: 20,
+                observed_at: '2026-08-22T12:00:00.000Z',
+                vehicle: { fuel: 'HIBRIDO', total_capacity: 90 }
+            }]
+        }
+    });
+    assert.deepEqual(positionsResult.structuredContent, {
+        title: 'Recent buses',
+        positions: [{
+            vehicleId: '9001',
+            line: '1',
+            line_name: 'Centro',
+            latitude: 43.4623,
+            longitude: -3.8099,
+            speed_kmh: 20,
+            observed_at: '2026-08-22T12:00:00.000Z',
+            vehicle: { fuel: 'HIBRIDO', total_capacity: 90 }
+        }]
+    });
+
+    const rechargeResult = await client.callTool({
+        name: 'santander_render_tus_recharge_points_map',
+        arguments: {
+            title: 'Recharge points',
+            points: [{
+                name: 'Estanco Centro',
+                vendor_type: 'Estanco',
+                address: 'Calle Centro 1',
+                postcode: '39001',
+                town: 'Santander',
+                latitude: 43.4623,
+                longitude: -3.8099
+            }]
+        }
+    });
+    assert.deepEqual(rechargeResult.structuredContent, {
+        title: 'Recharge points',
+        points: [{
+            name: 'Estanco Centro',
+            vendor_type: 'Estanco',
+            address: 'Calle Centro 1',
+            postcode: '39001',
+            town: 'Santander',
+            latitude: 43.4623,
+            longitude: -3.8099
         }]
     });
 });

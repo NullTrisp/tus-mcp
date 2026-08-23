@@ -5,6 +5,7 @@ import {
     busEstimationsInputSchema,
     busEstimationsResultSchema,
     busLineSchema,
+    busLineSequenceSchema,
     busLinesInputSchema,
     busLinesResultSchema,
     busLineStopSchema,
@@ -14,8 +15,17 @@ import {
     busStopLookupInputSchema,
     busStopsInputSchema,
     busStopsResultSchema,
+    busPositionSchema,
+    busVehicleSchema,
+    recentBusPositionsInputSchema,
+    recentBusPositionsResultSchema,
+    tusRechargePointSchema,
+    tusRechargePointsInputSchema,
+    tusRechargePointsResultSchema,
     BusLine,
-    BusStop
+    BusPosition,
+    BusStop,
+    BusVehicle
 } from '../types/bus.js';
 
 const DATASET_PAGE_SIZE = 1000;
@@ -25,7 +35,11 @@ type DatasetName =
     | 'paradas_bus'
     | 'lineas_bus'
     | 'lineas_bus_paradas'
-    | 'control_flotas_estimaciones';
+    | 'lineas_bus_secuencia'
+    | 'control_flotas_estimaciones'
+    | 'control_flotas_posiciones'
+    | 'control_flotas_vehiculos'
+    | 'tus_puntos_recarga';
 
 export class SantanderBusService {
     private static readonly BASE_URL = 'https://datos.santander.es/api/rest/datasets';
@@ -34,14 +48,16 @@ export class SantanderBusService {
         return `${this.BASE_URL}/${dataset}.json`;
     }
 
-    private static async fetchPage<T extends { 'dc:identifier': string }>(
+    private static async fetchPage<T extends { uri: string }>(
         dataset: DatasetName,
         schema: z.ZodType<T>,
-        page: number
+        page: number,
+        query?: string
     ) {
         const url = new URL(this.datasetUrl(dataset));
         url.searchParams.set('items', String(DATASET_PAGE_SIZE));
         url.searchParams.set('page', String(page));
+        if (query) url.searchParams.set('query', query);
 
         let response: Response;
         try {
@@ -83,14 +99,15 @@ export class SantanderBusService {
         return parsed.data;
     }
 
-    private static async fetchDataset<T extends { 'dc:identifier': string }>(
+    private static async fetchDataset<T extends { uri: string }>(
         dataset: DatasetName,
-        schema: z.ZodType<T>
+        schema: z.ZodType<T>,
+        query?: string
     ): Promise<T[]> {
-        const firstPage = await this.fetchPage(dataset, schema, 1);
+        const firstPage = await this.fetchPage(dataset, schema, 1, query);
         const remainingPages = [];
         for (let page = 2; page <= firstPage.summary.pages; page += 1) {
-            remainingPages.push(await this.fetchPage(dataset, schema, page));
+            remainingPages.push(await this.fetchPage(dataset, schema, page, query));
         }
 
         const pages = [firstPage, ...remainingPages];
@@ -101,7 +118,12 @@ export class SantanderBusService {
         }
 
         const resources = pages.flatMap((page) => page.resources);
-        const uniqueResources = new Map(resources.map((resource) => [resource['dc:identifier'], resource]));
+        const uniqueResources = new Map(resources.map((resource) => [
+            'dc:identifier' in resource && typeof resource['dc:identifier'] === 'string'
+                ? resource['dc:identifier']
+                : resource.uri,
+            resource
+        ]));
         if (uniqueResources.size !== firstPage.summary.items) {
             throw new Error(
                 `Santander Open Data API returned ${uniqueResources.size} unique ${dataset} records; expected ${firstPage.summary.items}.`
@@ -188,21 +210,181 @@ export class SantanderBusService {
 
     static async getBusLineStops(lineId: string) {
         const input = busLineStopsInputSchema.parse({ lineId });
-        const [lines, lineStops] = await Promise.all([
-            this.fetchDataset('lineas_bus', busLineSchema),
-            this.fetchDataset('lineas_bus_paradas', busLineStopSchema)
-        ]);
+        const lines = await this.fetchDataset('lineas_bus', busLineSchema);
         const line = this.findLine(lines, input.lineId);
+        const sequenceQuery = `dc\\:EtiquetaLinea:${line['ayto:numero']}`;
+        const [lineStops, sequences, allStops] = await Promise.all([
+            this.fetchDataset('lineas_bus_paradas', busLineStopSchema),
+            this.fetchDataset('lineas_bus_secuencia', busLineSequenceSchema, sequenceQuery),
+            this.fetchDataset('paradas_bus', busStopSchema)
+        ]);
         const stops = lineStops.filter((stop) => stop['ayto:linea'] === line['dc:identifier']);
+        const lineStopByNumber = new Map(stops.map((stop) => [stop['ayto:parada'], stop]));
+        const stopByNumber = new Map(allStops.map((stop) => [stop['ayto:numero'], stop]));
+        const routeGroups = new Map<string, typeof sequences>();
+        for (const sequence of sequences) {
+            const key = `${sequence['ayto:Ruta']}:${sequence['ayto:SentidoRuta']}`;
+            const group = routeGroups.get(key) ?? [];
+            group.push(sequence);
+            routeGroups.set(key, group);
+        }
+        const warnings: string[] = [];
+        const routes = [...routeGroups.values()].map((route) => {
+            const ordered = route.sort((first, second) =>
+                Number(first['ayto:PuntoKM']) - Number(second['ayto:PuntoKM'])
+            );
+            const routeStops = ordered.flatMap((sequence, index) => {
+                const relationship = lineStopByNumber.get(sequence['ayto:NParada']);
+                const stop = stopByNumber.get(sequence['ayto:NParada']);
+                const latitude = relationship?.['wgs84_pos:lat'] ?? stop?.['wgs84_pos:lat'];
+                const longitude = relationship?.['wgs84_pos:long'] ?? stop?.['wgs84_pos:long'];
+                if (!latitude || !longitude) {
+                    warnings.push(`Stop ${sequence['ayto:NParada']} has sequence data but no WGS84 coordinates.`);
+                    return [];
+                }
+                return [{
+                    stopId: sequence['ayto:NParada'],
+                    name: sequence['ayto:NombreParada'],
+                    ...(stop && { address: stop['vivo:address1'] }),
+                    sequence: index + 1,
+                    distance_meters: Number(sequence['ayto:PuntoKM']),
+                    latitude: Number(latitude),
+                    longitude: Number(longitude)
+                }];
+            });
+            return {
+                route_id: ordered[0]['ayto:Ruta'],
+                direction: ordered[0]['ayto:SentidoRuta'],
+                name: ordered[0]['ayto:NombreSublinea'],
+                total_found: routeStops.length,
+                stops: routeStops
+            };
+        }).sort((first, second) =>
+            first.direction.localeCompare(second.direction) || Number(first.route_id) - Number(second.route_id)
+        );
 
         return busLineStopsResultSchema.parse({
-            source_urls: [this.datasetUrl('lineas_bus'), this.datasetUrl('lineas_bus_paradas')],
+            source_urls: [
+                this.datasetUrl('lineas_bus'),
+                this.datasetUrl('lineas_bus_paradas'),
+                this.datasetUrl('lineas_bus_secuencia'),
+                this.datasetUrl('paradas_bus')
+            ],
             fetched_at: new Date().toISOString(),
             line: line['ayto:numero'],
             line_id: line['dc:identifier'],
             line_name: line['dc:name'],
             total_found: stops.length,
-            stops
+            stops,
+            routes,
+            warnings
+        });
+    }
+
+    static async getRecentBusPositions(lineId?: string, maxAgeMinutes: number = 15) {
+        const input = recentBusPositionsInputSchema.parse({ lineId, maxAgeMinutes });
+        const lines = await this.fetchDataset('lineas_bus', busLineSchema);
+        const selectedLine = input.lineId ? this.findLine(lines, input.lineId) : undefined;
+        const now = new Date();
+        const observedSince = new Date(now.getTime() - input.maxAgeMinutes * 60_000);
+        const query = [
+            `ayto\\:instante:{${observedSince.toISOString()} TO ${new Date(now.getTime() + 60_000).toISOString()}}`,
+            ...(selectedLine ? [`ayto\\:linea:${selectedLine['dc:identifier']}`] : [])
+        ].join(' AND ');
+        const [observations, vehicles] = await Promise.all([
+            this.fetchDataset('control_flotas_posiciones', busPositionSchema, query),
+            this.fetchDataset('control_flotas_vehiculos', busVehicleSchema)
+        ]);
+        const latestByVehicle = new Map<string, BusPosition>();
+        for (const observation of observations) {
+            const current = latestByVehicle.get(observation['ayto:vehiculo']);
+            if (!current || observation['ayto:instante'] > current['ayto:instante']) {
+                latestByVehicle.set(observation['ayto:vehiculo'], observation);
+            }
+        }
+        const lineById = new Map(lines.map((line) => [line['dc:identifier'], line]));
+        const vehicleById = new Map(vehicles.map((vehicle) => [vehicle['dc:identifier'], vehicle]));
+        const optionalNumber = (value: string) => value === '' ? null : Number(value);
+        const vehicleDetails = (vehicle?: BusVehicle) => {
+            if (!vehicle) return null;
+            const seated = optionalNumber(vehicle['ayto:PlazasSentadas']);
+            const standing = optionalNumber(vehicle['ayto:PlazasDePie']);
+            return {
+                fuel: vehicle['ayto:Combustible'] || null,
+                length_meters: optionalNumber(vehicle['ayto:Longitud']),
+                seated_capacity: seated,
+                standing_capacity: standing,
+                total_capacity: seated === null || standing === null ? null : seated + standing
+            };
+        };
+        const positions = [...latestByVehicle.values()].map((observation) => {
+            const line = lineById.get(observation['ayto:linea']);
+            return {
+                vehicleId: observation['ayto:vehiculo'],
+                line: line?.['ayto:numero'] ?? null,
+                line_id: observation['ayto:linea'],
+                line_name: line?.['dc:name'] ?? null,
+                latitude: Number(observation['wgs84_pos:lat']),
+                longitude: Number(observation['wgs84_pos:long']),
+                speed_kmh: optionalNumber(observation['ayto:velocidad']),
+                state: observation['ayto:estado'],
+                observed_at: observation['ayto:instante'],
+                age_seconds: Math.max(0, Math.floor((now.getTime() - Date.parse(observation['ayto:instante'])) / 1000)),
+                vehicle: vehicleDetails(vehicleById.get(observation['ayto:vehiculo']))
+            };
+        }).sort((first, second) =>
+            (first.line ?? '').localeCompare(second.line ?? '') || first.vehicleId.localeCompare(second.vehicleId)
+        );
+
+        return recentBusPositionsResultSchema.parse({
+            source_urls: [
+                this.datasetUrl('control_flotas_posiciones'),
+                this.datasetUrl('control_flotas_vehiculos'),
+                this.datasetUrl('lineas_bus')
+            ],
+            fetched_at: now.toISOString(),
+            filters: {
+                ...(selectedLine && { lineId: selectedLine['ayto:numero'] }),
+                maxAgeMinutes: input.maxAgeMinutes
+            },
+            observed_since: observedSince.toISOString(),
+            total_observations: observations.length,
+            returned: positions.length,
+            positions
+        });
+    }
+
+    static async getTusRechargePoints(limit: number = 20, search?: string) {
+        const input = tusRechargePointsInputSchema.parse({ limit, search });
+        let points = await this.fetchDataset('tus_puntos_recarga', tusRechargePointSchema);
+        if (input.search) {
+            const term = input.search.toLowerCase();
+            points = points.filter((point) => [
+                point['dc:title'],
+                point['dc:tipo_expendedor'],
+                point['dc:ubicacion_calle'],
+                point['dc:ubicacion_codigo_postal'],
+                point['dc:ubicacion_poblacion']
+            ].some((value) => value.toLowerCase().includes(term)));
+        }
+        const limitedPoints = points.slice(0, input.limit).map((point) => ({
+            name: point['dc:title'],
+            vendor_type: point['dc:tipo_expendedor'],
+            address: point['dc:ubicacion_calle'],
+            postcode: point['dc:ubicacion_codigo_postal'],
+            town: point['dc:ubicacion_poblacion'],
+            province: point['dc:ubicacion_provincia'],
+            latitude: Number(point['dc:ubicacion_latitud']),
+            longitude: Number(point['dc:ubicacion_longitud']),
+            source_modified_at: point['dc:modified']
+        }));
+
+        return tusRechargePointsResultSchema.parse({
+            source_urls: [this.datasetUrl('tus_puntos_recarga')],
+            fetched_at: new Date().toISOString(),
+            total_found: points.length,
+            returned: limitedPoints.length,
+            points: limitedPoints
         });
     }
 

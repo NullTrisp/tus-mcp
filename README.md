@@ -12,20 +12,35 @@ MCP server for Santander's TUS bus data. Every tool reads the official Santander
   - `search`: optional public line number, name, or API resource ID.
 - `santander_get_bus_line_stops`
   - `lineId`: required public line number from `lineas_bus["ayto:numero"]`, such as `24C1` or `N2`.
+  - Returns raw stop relationships plus ordered route variants from `lineas_bus_secuencia`.
+  - Ordered stops include sequence, published distance, name, address when available, and WGS84 coordinates.
 - `santander_get_bus_estimations`
   - `stopId`: optional public stop number from `paradas_bus["ayto:numero"]`, such as `15`.
   - `lineId`: optional public line number, such as `1` or `24C1`.
+  - `limit`: integer from 1 to 100; defaults to 20.
+- `santander_get_recent_bus_positions`
+  - `lineId`: optional public line number.
+  - `maxAgeMinutes`: observation window from 1 to 120 minutes; defaults to 15.
+  - Returns the newest observation per vehicle with public line, speed, capacity, length, and fuel type when available.
+- `santander_get_tus_recharge_points`
+  - `search`: optional name, address, postcode, town, or vendor type.
   - `limit`: integer from 1 to 100; defaults to 20.
 - `santander_render_bus_stops_map`
   - Renders up to 100 selected stops as clickable pins in an interactive OpenStreetMap widget.
   - Call a stop data tool first, then pass each stop's public ID, name, and numeric WGS84 latitude/longitude.
   - Supports inline and fullscreen display in ChatGPT while leaving the data tools usable in clients without UI support.
 - `santander_render_bus_lines_map`
-  - Renders the stops served by up to 10 lines as distinct colored, clickable markers.
-  - Call `santander_get_bus_line_stops` first and pass 2–100 WGS84 stops per line.
-  - Stops are not joined because the source does not provide route geometry.
+  - Renders up to 10 lines as distinct colored, clickable markers.
+  - Pass ordered routes from `santander_get_bus_line_stops` for dashed schematic paths, or plain stops for marker-only display.
+  - Dashed paths show published stop order, not road geometry.
+- `santander_render_bus_positions_map`
+  - Renders up to 100 recent bus positions, colored by public line.
+  - Call `santander_get_recent_bus_positions` first and pass its `positions` array.
+- `santander_render_tus_recharge_points_map`
+  - Renders up to 100 TUS sale and recharge points as clickable markers.
+  - Call `santander_get_tus_recharge_points` first and pass its `points` array.
 
-The estimates tool preserves the API's exact signed integer values as `arrival_seconds` and `distance_meters`. Empty second-bus values become `null`; they are not presented as inferred arrival states. Each result includes `source_urls` and `fetched_at`, while each estimate includes `observed_at` and `source_modified_at`.
+The estimates tool preserves the API's exact signed integer values as `arrival_seconds` and `distance_meters`. Empty second-bus values become `null`; they are not presented as inferred arrival states. Recent positions are filtered at the Open Data API before download and deduplicated by vehicle. Each result includes `source_urls` and `fetched_at`, while time-sensitive records include their observation timestamp.
 
 The official datasets occasionally contain live estimate references that are absent from the stop or line master dataset. Those estimates remain queryable because they are still validated against the live dataset, and the result includes a `warnings` entry instead of silently discarding official data.
 
@@ -44,7 +59,7 @@ Tool inputs use public numbers. Internally, line-stop relationships reference a 
 
 - MCP inputs and structured outputs use Zod schemas.
 - API envelopes and every known resource field are validated at runtime.
-- All pages are fetched, checked for consistent summaries, and deduplicated by `dc:identifier`.
+- All selected pages are fetched, checked for consistent summaries, and deduplicated by `dc:identifier` or stable resource URI.
 - Invalid JSON, malformed API data, partial pagination, unknown public IDs, timeouts, and non-success HTTP responses fail closed.
 - Unknown upstream fields are removed from output until they have an explicit schema.
 
@@ -100,7 +115,7 @@ Connect to `http://localhost:3000/mcp`.
 Deploy publicly and set `ALLOWED_HOSTS` to the hostname Cloud Run assigns to the service (without `https://`):
 
 ```bash
-gcloud run deploy tus-mcp --source . --region europe-west1 --allow-unauthenticated --set-env-vars ALLOWED_HOSTS=YOUR_SERVICE_HOSTNAME,WIDGET_DOMAIN=https://YOUR_SERVICE_HOSTNAME --project=PROJECT
+gcloud run deploy tus-mcp --source . --region REGION --allow-unauthenticated --set-env-vars ALLOWED_HOSTS=YOUR_SERVICE_HOSTNAME,WIDGET_DOMAIN=https://YOUR_SERVICE_HOSTNAME,OPENAI_APPS_CHALLENGE=replace-with-the-value-from-chatgpt --project=PROJECT
 ```
 
 The MCP endpoint will be `https://YOUR_SERVICE_HOSTNAME/mcp`.

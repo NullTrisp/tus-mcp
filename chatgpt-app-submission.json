@@ -4,7 +4,7 @@
   "app_info": {
     "display_name": "TUS Santander",
     "subtitle": "Santander bus information",
-    "description": "TUS Santander helps users find city bus stops and lines, map selected stops, see the stops served by a line, and check the latest published arrival estimates using official Santander Open Data.",
+    "description": "TUS Santander helps users find city bus stops, ordered routes, recent vehicle positions, arrival estimates, and TUS recharge points using official Santander Open Data.",
     "category": "TRAVEL"
   },
   "tools": {
@@ -56,6 +56,30 @@
         "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
       }
     },
+    "santander_get_recent_bus_positions": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves recent published vehicle positions, line records, and vehicle metadata without modifying data.",
+        "open_world_justification": "Reads public municipal datasets without changing any external or publicly visible state.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
+      }
+    },
+    "santander_get_tus_recharge_points": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves published TUS sale and recharge point records without modifying data.",
+        "open_world_justification": "Reads a public municipal dataset without changing any external or publicly visible state.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
+      }
+    },
     "santander_render_bus_stops_map": {
       "annotations": {
         "readOnlyHint": true,
@@ -76,6 +100,30 @@
       },
       "justifications": {
         "read_only_justification": "Only presents supplied bus-line and stop coordinates on an interactive map and does not modify data.",
+        "open_world_justification": "Renders supplied coordinates without changing any external or publicly visible state.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
+      }
+    },
+    "santander_render_bus_positions_map": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only presents supplied recent bus positions on an interactive map and does not modify data.",
+        "open_world_justification": "Renders supplied coordinates without changing any external or publicly visible state.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
+      }
+    },
+    "santander_render_tus_recharge_points_map": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only presents supplied TUS recharge-point coordinates on an interactive map and does not modify data.",
         "open_world_justification": "Renders supplied coordinates without changing any external or publicly visible state.",
         "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
       }
@@ -103,7 +151,7 @@
       "user_prompt": "Show me all stops served by Santander bus line 24C1.",
       "file_attachment_urls": null,
       "tools_triggered": "santander_get_bus_line_stops",
-      "expected_output": "Returns the selected line and all stop relationships published for it.",
+      "expected_output": "Returns the selected line, all raw stop relationships, and its ordered, named, georeferenced route variants.",
       "expected_output_url": null
     },
     {
@@ -135,7 +183,23 @@
       "user_prompt": "Show Santander bus line 1 on a map.",
       "file_attachment_urls": null,
       "tools_triggered": "santander_get_bus_line_stops, santander_render_bus_lines_map",
-      "expected_output": "Retrieves the line stops, then displays them as clickable markers grouped by color without joining them into a route.",
+      "expected_output": "Retrieves the ordered route variants, then displays their stops and dashed schematic sequences grouped by line color.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Find and render recently observed Santander buses.",
+      "user_prompt": "Where are the active buses on Santander line 1 right now? Show them on a map.",
+      "file_attachment_urls": null,
+      "tools_triggered": "santander_get_recent_bus_positions, santander_render_bus_positions_map",
+      "expected_output": "Returns the newest recent observation per vehicle with line and vehicle metadata, then displays those buses on an interactive map.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Find a TUS card recharge point.",
+      "user_prompt": "Where can I recharge my TUS card near the Sardinero?",
+      "file_attachment_urls": null,
+      "tools_triggered": "santander_get_tus_recharge_points, santander_render_tus_recharge_points_map",
+      "expected_output": "Returns matching official TUS sale or recharge points, then displays them as clickable markers on an interactive map.",
       "expected_output_url": null
     }
   ],

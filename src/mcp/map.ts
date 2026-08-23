@@ -2,7 +2,7 @@ import { registerAppResource, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/e
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod/v4';
 
-const mapUri = 'ui://santander/bus-map-v4.html';
+const mapUri = 'ui://santander/bus-map-v6.html';
 const readOnlyAnnotations = {
     readOnlyHint: true,
     destructiveHint: false,
@@ -29,13 +29,65 @@ const mapLineStopSchema = z.object({
     longitude: z.number().min(-180).max(180)
 });
 
+const mapRouteStopSchema = z.object({
+    stopId: z.string().min(1).describe('Public stop number'),
+    name: z.string().min(1),
+    address: z.string().optional(),
+    sequence: z.number().int().positive(),
+    distance_meters: z.number().nonnegative(),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180)
+});
+
+const mapRouteSchema = z.object({
+    route_id: z.string().min(1).describe('Stable route variant identifier'),
+    direction: z.string().min(1).describe('Published route direction'),
+    name: z.string().min(1).describe('Published subline name'),
+    stops: z.array(mapRouteStopSchema).min(2).max(100)
+});
+
+const mapLineSchema = z.object({
+    id: z.string().min(1).describe('Public bus-line number'),
+    name: z.string().min(1).describe('Bus-line name or destination'),
+    stops: z.array(mapLineStopSchema).min(2).max(100).optional(),
+    routes: z.array(mapRouteSchema).min(1).max(10).optional()
+}).refine((line) => line.stops || line.routes, {
+    message: 'Each line must include stops or ordered routes'
+});
+
 const busLinesMapSchema = z.object({
     title: z.string().min(1).max(100).default('Santander bus lines'),
-    lines: z.array(z.object({
-        id: z.string().min(1).describe('Public bus-line number'),
-        name: z.string().min(1).describe('Bus-line name or destination'),
-        stops: z.array(mapLineStopSchema).min(2).max(100)
-    })).min(1).max(10)
+    lines: z.array(mapLineSchema).min(1).max(10)
+});
+
+const busPositionsMapSchema = z.object({
+    title: z.string().min(1).max(100).default('Recent Santander buses'),
+    positions: z.array(z.object({
+        vehicleId: z.string().min(1),
+        line: z.string().min(1).nullable(),
+        line_name: z.string().min(1).nullable().optional(),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+        speed_kmh: z.number().int().nullable().optional(),
+        observed_at: z.iso.datetime(),
+        vehicle: z.object({
+            fuel: z.string().nullable(),
+            total_capacity: z.number().int().nonnegative().nullable()
+        }).nullable().optional()
+    })).min(1).max(100)
+});
+
+const tusRechargePointsMapSchema = z.object({
+    title: z.string().min(1).max(100).default('TUS recharge points'),
+    points: z.array(z.object({
+        name: z.string().min(1),
+        vendor_type: z.string(),
+        address: z.string(),
+        postcode: z.string(),
+        town: z.string(),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180)
+    })).min(1).max(100)
 });
 
 const mapHtml = String.raw`<!doctype html>
@@ -87,17 +139,75 @@ const mapHtml = String.raw`<!doctype html>
             return container;
         }
 
+        function positionPopup(position) {
+            const container = document.createElement('div');
+            const heading = document.createElement('strong');
+            const details = document.createElement('span');
+            heading.textContent = position.line ? 'Line ' + position.line : 'Bus ' + position.vehicleId;
+            details.textContent = [
+                'Vehicle ' + position.vehicleId,
+                position.speed_kmh != null && position.speed_kmh + ' km/h',
+                position.vehicle?.fuel,
+                position.vehicle?.total_capacity != null && position.vehicle.total_capacity + ' passengers',
+                new Date(position.observed_at).toLocaleTimeString()
+            ].filter(Boolean).join(' · ');
+            container.append(heading, details);
+            return container;
+        }
+
+        function rechargePointPopup(point) {
+            const container = document.createElement('div');
+            const heading = document.createElement('strong');
+            const details = document.createElement('span');
+            heading.textContent = point.name;
+            details.textContent = [point.vendor_type, point.address, point.postcode, point.town].filter(Boolean).join(' · ');
+            container.append(heading, details);
+            return container;
+        }
+
         function render(data) {
             const hasStops = Array.isArray(data?.stops) && data.stops.length > 0;
             const hasLines = Array.isArray(data?.lines) && data.lines.length > 0;
-            if (!hasStops && !hasLines) return;
-            title.textContent = data.title || (hasLines ? 'Santander bus lines' : 'Santander bus stops');
+            const hasPositions = Array.isArray(data?.positions) && data.positions.length > 0;
+            const hasRechargePoints = Array.isArray(data?.points) && data.points.length > 0;
+            if (!hasStops && !hasLines && !hasPositions && !hasRechargePoints) return;
+            title.textContent = data.title || (hasRechargePoints ? 'TUS recharge points' : hasPositions ? 'Recent Santander buses' : hasLines ? 'Santander bus lines' : 'Santander bus stops');
             layers.clearLayers();
             const bounds = [];
-            if (hasLines) {
+            if (hasRechargePoints) {
+                data.points.forEach((point) => {
+                    const coordinates = [point.latitude, point.longitude];
+                    L.marker(coordinates).bindPopup(rechargePointPopup(point)).addTo(layers);
+                    bounds.push(coordinates);
+                });
+            } else if (hasPositions) {
+                const positionColors = new Map();
+                data.positions.forEach((position) => {
+                    const line = position.line || '?';
+                    if (!positionColors.has(line)) {
+                        positionColors.set(line, lineColors[positionColors.size % lineColors.length]);
+                    }
+                    const point = [position.latitude, position.longitude];
+                    const color = positionColors.get(line);
+                    L.circleMarker(point, {
+                        color,
+                        fillColor: color,
+                        fillOpacity: 0.95,
+                        radius: 7,
+                        weight: 2
+                    }).bindPopup(positionPopup(position)).addTo(layers);
+                    bounds.push(point);
+                });
+            } else if (hasLines) {
                 data.lines.forEach((line, index) => {
                     const color = lineColors[index % lineColors.length];
-                    line.stops.forEach((stop) => {
+                    const routes = Array.isArray(line.routes) ? line.routes : [{ stops: line.stops }];
+                    routes.forEach((route) => {
+                        const routePoints = route.stops.map((stop) => [stop.latitude, stop.longitude]);
+                        if (line.routes) {
+                            L.polyline(routePoints, { color, dashArray: '6 6', opacity: 0.75, weight: 3 }).addTo(layers);
+                        }
+                        route.stops.forEach((stop) => {
                         const point = [stop.latitude, stop.longitude];
                         L.circleMarker(point, {
                             color,
@@ -105,8 +215,9 @@ const mapHtml = String.raw`<!doctype html>
                             fillOpacity: 0.9,
                             radius: 4,
                             weight: 2
-                        }).bindPopup(popupContent(stop, line)).addTo(layers);
+                        }).bindPopup(popupContent({ ...stop, id: stop.id || stop.stopId }, line)).addTo(layers);
                         bounds.push(point);
+                        });
                     });
                 });
             } else {
@@ -142,7 +253,7 @@ export function registerBusMap(server: McpServer, widgetDomain: string) {
         server,
         'Santander bus map',
         mapUri,
-        { description: 'Interactive map used by the Santander bus-stop and bus-line renderers.' },
+        { description: 'Interactive map used by the Santander bus-stop, bus-line, live-position, and TUS recharge-point renderers.' },
         async () => ({
             contents: [{
                 uri: mapUri,
@@ -191,7 +302,7 @@ export function registerBusMap(server: McpServer, widgetDomain: string) {
         'santander_render_bus_lines_map',
         {
             title: 'Show Santander bus-line stops on a map',
-            description: 'Render the stops served by up to 10 Santander bus lines, using a distinct marker color for each line. First call santander_get_bus_line_stops for each line, then pass numeric WGS84 coordinates. Stops are not joined because the source does not provide route geometry.',
+            description: 'Render up to 10 Santander bus lines. Pass the ordered routes returned by santander_get_bus_line_stops to show each published stop sequence as a dashed schematic path, or pass stops for marker-only display.',
             inputSchema: busLinesMapSchema,
             outputSchema: busLinesMapSchema,
             annotations: readOnlyAnnotations,
@@ -206,6 +317,52 @@ export function registerBusMap(server: McpServer, widgetDomain: string) {
             content: [{
                 type: 'text',
                 text: `Showing ${lines.length} Santander bus ${lines.length === 1 ? 'line' : 'lines'} on the map.`
+            }]
+        })
+    );
+
+    server.registerTool(
+        'santander_render_bus_positions_map',
+        {
+            title: 'Show recent Santander buses on a map',
+            description: 'Render recent Santander bus positions on an interactive map. First call santander_get_recent_bus_positions, then pass the returned positions.',
+            inputSchema: busPositionsMapSchema,
+            outputSchema: busPositionsMapSchema,
+            annotations: readOnlyAnnotations,
+            _meta: {
+                ui: { resourceUri: mapUri },
+                'openai/toolInvocation/invoking': 'Preparing the live bus map…',
+                'openai/toolInvocation/invoked': 'Live bus map ready.'
+            }
+        },
+        async ({ title, positions }) => ({
+            structuredContent: { title, positions },
+            content: [{
+                type: 'text',
+                text: `Showing ${positions.length} recent Santander ${positions.length === 1 ? 'bus' : 'buses'} on the map.`
+            }]
+        })
+    );
+
+    server.registerTool(
+        'santander_render_tus_recharge_points_map',
+        {
+            title: 'Show TUS recharge points on a map',
+            description: 'Render TUS sale and recharge points on an interactive map. First call santander_get_tus_recharge_points, then pass its points array.',
+            inputSchema: tusRechargePointsMapSchema,
+            outputSchema: tusRechargePointsMapSchema,
+            annotations: readOnlyAnnotations,
+            _meta: {
+                ui: { resourceUri: mapUri },
+                'openai/toolInvocation/invoking': 'Preparing the TUS recharge-point map…',
+                'openai/toolInvocation/invoked': 'TUS recharge-point map ready.'
+            }
+        },
+        async ({ title, points }) => ({
+            structuredContent: { title, points },
+            content: [{
+                type: 'text',
+                text: `Showing ${points.length} TUS recharge ${points.length === 1 ? 'point' : 'points'} on the map.`
             }]
         })
     );

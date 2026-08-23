@@ -53,6 +53,60 @@ export const busLineStopSchema = z.object({
     uri: webUrlSchema
 });
 
+export const busLineSequenceSchema = z.object({
+    'ayto:Ruta': unsignedIntegerStringSchema,
+    'ayto:PuntoKM': numericStringSchema,
+    'ayto:NParada': unsignedIntegerStringSchema,
+    'dc:EtiquetaLinea': nonEmptyStringSchema,
+    'dc:modified': z.iso.datetime(),
+    'ayto:Linea': unsignedIntegerStringSchema,
+    'ayto:SentidoRuta': nonEmptyStringSchema,
+    'dc:identifier': nonEmptyStringSchema,
+    'ayto:NombreSublinea': nonEmptyStringSchema,
+    'ayto:NombreParada': nonEmptyStringSchema,
+    'ayto:PosX': numericStringSchema,
+    'ayto:PosY': numericStringSchema,
+    uri: webUrlSchema
+});
+
+export const busPositionSchema = z.object({
+    'wgs84_pos:long': coordinateSchema(-180, 180),
+    'ayto:instante': z.iso.datetime(),
+    'gn:coordY': numericStringSchema,
+    'gn:coordX': numericStringSchema,
+    'ayto:linea': unsignedIntegerStringSchema,
+    'ayto:velocidad': optionalIntegerStringSchema,
+    'dc:modified': z.iso.datetime(),
+    'ayto:vehiculo': unsignedIntegerStringSchema,
+    'wgs84_pos:lat': coordinateSchema(-90, 90),
+    'ayto:estado': nonEmptyStringSchema,
+    uri: webUrlSchema
+});
+
+export const busVehicleSchema = z.object({
+    'ayto:PlazasDePie': optionalIntegerStringSchema,
+    'ayto:Longitud': z.string(),
+    'dc:identifier': unsignedIntegerStringSchema,
+    'ayto:Combustible': z.string(),
+    'ayto:PlazasSentadas': optionalIntegerStringSchema,
+    'dc:modified': z.iso.datetime(),
+    uri: webUrlSchema
+});
+
+export const tusRechargePointSchema = z.object({
+    'dc:ubicacion_latitud': coordinateSchema(-90, 90),
+    'dc:ubicacion_codigo_postal': z.string(),
+    'dc:tipo_expendedor': z.string(),
+    'dc:ubicacion_provincia': z.string(),
+    'dc:title': nonEmptyStringSchema,
+    'dc:modified': z.iso.datetime(),
+    'dc:ubicacion_calle': z.string(),
+    'dc:ubicacion_ciudad': z.string(),
+    'dc:ubicacion_poblacion': z.string(),
+    'dc:ubicacion_longitud': coordinateSchema(-180, 180),
+    uri: webUrlSchema
+});
+
 export const busEstimationSchema = z.object({
     'ayto:tiempo1': integerStringSchema,
     'ayto:distancia2': optionalIntegerStringSchema,
@@ -106,6 +160,22 @@ export const busLineStopsInputSchema = z.object({
     lineId: lineNumberSchema.describe('Public line number from ayto:numero, for example 24C1 or N2')
 });
 
+export const recentBusPositionsInputSchema = z.object({
+    lineId: lineNumberSchema.describe('Optional public line number from ayto:numero').optional(),
+    maxAgeMinutes: z.number().int().min(1).max(120)
+        .describe('Only include positions observed within this many minutes (1-120)')
+        .default(15)
+});
+
+export const tusRechargePointsInputSchema = z.object({
+    search: z.string().trim().min(1).max(100)
+        .describe('Optional point name, street, postcode, town, or vendor type')
+        .optional(),
+    limit: z.number().int().min(1).max(100)
+        .describe('Maximum number of recharge points to return (1-100)')
+        .default(20)
+});
+
 export const busEstimationsInputSchema = z.object({
     stopId: stopNumberSchema.describe('Public stop number from ayto:numero, for example 15').optional(),
     lineId: lineNumberSchema.describe('Public line number from ayto:numero, for example 1 or 24C1').optional(),
@@ -146,9 +216,80 @@ export const busLineStopsResultSchema = z.object({
     line_id: unsignedIntegerStringSchema,
     line_name: nonEmptyStringSchema,
     total_found: z.number().int().nonnegative(),
-    stops: z.array(busLineStopSchema)
+    stops: z.array(busLineStopSchema),
+    warnings: z.array(nonEmptyStringSchema),
+    routes: z.array(z.object({
+        route_id: unsignedIntegerStringSchema,
+        direction: nonEmptyStringSchema,
+        name: nonEmptyStringSchema,
+        total_found: z.number().int().nonnegative(),
+        stops: z.array(z.object({
+            stopId: unsignedIntegerStringSchema,
+            name: nonEmptyStringSchema,
+            address: z.string().optional(),
+            sequence: z.number().int().positive(),
+            distance_meters: z.number().nonnegative(),
+            latitude: z.number().min(-90).max(90),
+            longitude: z.number().min(-180).max(180)
+        }))
+    }))
 }).refine((result) => result.total_found === result.stops.length, {
     message: 'Line-stop count does not match the returned resources'
+}).refine((result) => result.routes.every((route) => route.total_found === route.stops.length), {
+    message: 'Route-stop counts do not match the returned resources'
+});
+
+const vehicleDetailsSchema = z.object({
+    fuel: z.string().nullable(),
+    length_meters: z.number().nullable(),
+    seated_capacity: z.number().int().nonnegative().nullable(),
+    standing_capacity: z.number().int().nonnegative().nullable(),
+    total_capacity: z.number().int().nonnegative().nullable()
+});
+
+export const recentBusPositionsResultSchema = z.object({
+    ...sourceMetadataShape,
+    filters: z.object({
+        lineId: nonEmptyStringSchema.optional(),
+        maxAgeMinutes: z.number().int().min(1).max(120)
+    }),
+    observed_since: z.iso.datetime(),
+    total_observations: z.number().int().nonnegative(),
+    returned: z.number().int().nonnegative(),
+    positions: z.array(z.object({
+        vehicleId: unsignedIntegerStringSchema,
+        line: nonEmptyStringSchema.nullable(),
+        line_id: unsignedIntegerStringSchema,
+        line_name: nonEmptyStringSchema.nullable(),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+        speed_kmh: z.number().int().nullable(),
+        state: nonEmptyStringSchema,
+        observed_at: z.iso.datetime(),
+        age_seconds: z.number().int().nonnegative(),
+        vehicle: vehicleDetailsSchema.nullable()
+    }))
+}).refine((result) => result.returned === result.positions.length, {
+    message: 'Bus-position count does not match the returned resources'
+});
+
+export const tusRechargePointsResultSchema = z.object({
+    ...sourceMetadataShape,
+    total_found: z.number().int().nonnegative(),
+    returned: z.number().int().nonnegative(),
+    points: z.array(z.object({
+        name: nonEmptyStringSchema,
+        vendor_type: z.string(),
+        address: z.string(),
+        postcode: z.string(),
+        town: z.string(),
+        province: z.string(),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+        source_modified_at: z.iso.datetime()
+    }))
+}).refine((result) => result.returned === result.points.length && result.total_found >= result.returned, {
+    message: 'Recharge-point counts do not match the returned resources'
 });
 
 const formattedEstimationSchema = z.object({
@@ -187,4 +328,8 @@ export const busEstimationsResultSchema = z.object({
 export type BusStop = z.infer<typeof busStopSchema>;
 export type BusLine = z.infer<typeof busLineSchema>;
 export type BusLineStop = z.infer<typeof busLineStopSchema>;
+export type BusLineSequence = z.infer<typeof busLineSequenceSchema>;
 export type BusEstimation = z.infer<typeof busEstimationSchema>;
+export type BusPosition = z.infer<typeof busPositionSchema>;
+export type BusVehicle = z.infer<typeof busVehicleSchema>;
+export type TusRechargePoint = z.infer<typeof tusRechargePointSchema>;

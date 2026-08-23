@@ -9,7 +9,7 @@
   </qa_pair>
   <qa_pair>
     <question>How does santander_get_bus_line_stops match a public line number to line-stop relationships?</question>
-    <answer>It validates the public number against lineas_bus, resolves its dc:identifier, and matches that internal ID to lineas_bus_paradas ayto:linea.</answer>
+    <answer>It validates the public number against lineas_bus, resolves its dc:identifier, matches that internal ID to lineas_bus_paradas ayto:linea, and joins lineas_bus_secuencia plus paradas_bus to return ordered, named, georeferenced route variants.</answer>
   </qa_pair>
   <qa_pair>
     <question>How many bus stops are returned by default when calling santander_get_bus_stops without a limit?</question>
@@ -45,6 +45,30 @@
   </qa_pair>
   <qa_pair>
     <question>How should ChatGPT display Santander bus lines on an interactive map?</question>
-    <answer>First call santander_get_bus_line_stops for each line, then pass 2–100 WGS84 stops per line to santander_render_bus_lines_map. Stops are grouped by marker color and are not joined because the source does not provide route geometry.</answer>
+    <answer>First call santander_get_bus_line_stops, then pass its ordered routes to santander_render_bus_lines_map. The map draws each published stop sequence as a dashed schematic path, not as road geometry.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How does santander_get_recent_bus_positions avoid returning a vehicle many times?</question>
+    <answer>It queries only the requested recent time window and keeps the newest observation for each vehicle.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How are internal line IDs in live positions presented to users?</question>
+    <answer>They are joined to lineas_bus so results include the public ayto:numero and line name when available.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Where do capacity and fuel information in recent bus positions come from?</question>
+    <answer>They are joined by vehicle ID from control_flotas_vehiculos and returned when published.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which fields can santander_get_tus_recharge_points search?</question>
+    <answer>Point name, address, postcode, town, and vendor type.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How should ChatGPT display recent Santander buses on a map?</question>
+    <answer>First call santander_get_recent_bus_positions, then pass its positions array to santander_render_bus_positions_map.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How should ChatGPT display TUS recharge points on a map?</question>
+    <answer>First call santander_get_tus_recharge_points, then pass its points array to santander_render_tus_recharge_points_map.</answer>
   </qa_pair>
 </evaluation>
