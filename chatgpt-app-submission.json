@@ -3,8 +3,8 @@
   "schema_version": 1,
   "app_info": {
     "display_name": "TUS Santander",
-    "subtitle": "Santander bus information",
-    "description": "TUS Santander helps users find city bus stops, ordered routes, recent vehicle positions, arrival estimates, and TUS recharge points using official Santander Open Data.",
+    "subtitle": "Santander public transport",
+    "description": "TUS Santander helps users find city bus stops, ordered routes, recent vehicle positions, arrival estimates, recharge points, and current TUeBICI station availability using official municipal and operator data.",
     "category": "TRAVEL"
   },
   "tools": {
@@ -80,6 +80,18 @@
         "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
       }
     },
+    "santander_get_tuebici_stations": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only retrieves current TUeBICI station information and availability from the official operator GBFS feed.",
+        "open_world_justification": "Reads a public operator feed without changing any external or publicly visible state.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
+      }
+    },
     "santander_render_bus_stops_map": {
       "annotations": {
         "readOnlyHint": true,
@@ -124,6 +136,18 @@
       },
       "justifications": {
         "read_only_justification": "Only presents supplied TUS recharge-point coordinates on an interactive map and does not modify data.",
+        "open_world_justification": "Renders supplied coordinates without changing any external or publicly visible state.",
+        "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
+      }
+    },
+    "santander_render_tuebici_stations_map": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only presents supplied TUeBICI station availability on an interactive map and does not modify data.",
         "open_world_justification": "Renders supplied coordinates without changing any external or publicly visible state.",
         "destructive_justification": "Does not delete, overwrite, revoke, send, or perform any irreversible action."
       }
@@ -200,6 +224,14 @@
       "file_attachment_urls": null,
       "tools_triggered": "santander_get_tus_recharge_points, santander_render_tus_recharge_points_map",
       "expected_output": "Returns matching official TUS sale or recharge points, then displays them as clickable markers on an interactive map.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Find available TUeBICI stations and render them.",
+      "user_prompt": "Show TUeBICI stations with bicycles available right now on a map.",
+      "file_attachment_urls": null,
+      "tools_triggered": "santander_get_tuebici_stations, santander_render_tuebici_stations_map",
+      "expected_output": "Returns current stations with at least one available bicycle and displays their availability on an interactive map.",
       "expected_output_url": null
     }
   ],

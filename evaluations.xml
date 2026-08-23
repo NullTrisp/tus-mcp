@@ -71,4 +71,16 @@
     <question>How should ChatGPT display TUS recharge points on a map?</question>
     <answer>First call santander_get_tus_recharge_points, then pass its points array to santander_render_tus_recharge_points_map.</answer>
   </qa_pair>
+  <qa_pair>
+    <question>How does santander_get_tuebici_stations obtain current availability?</question>
+    <answer>It joins station_information and station_status by station_id from the official TUeBICI operator GBFS feed.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What does onlyAvailable mean for TUeBICI stations?</question>
+    <answer>Only stations currently accepting rentals and reporting at least one available bicycle are returned.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How should ChatGPT display TUeBICI availability on a map?</question>
+    <answer>First call santander_get_tuebici_stations, then pass its stations array to santander_render_tuebici_stations_map.</answer>
+  </qa_pair>
 </evaluation>

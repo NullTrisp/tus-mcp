@@ -20,16 +20,19 @@ test('registers the bus map resource and returns renderable stop and line data',
     const linesMapTool = tools.tools.find((tool) => tool.name === 'santander_render_bus_lines_map');
     const positionsMapTool = tools.tools.find((tool) => tool.name === 'santander_render_bus_positions_map');
     const rechargeMapTool = tools.tools.find((tool) => tool.name === 'santander_render_tus_recharge_points_map');
+    const tuebiciMapTool = tools.tools.find((tool) => tool.name === 'santander_render_tuebici_stations_map');
     const uiMetadata = mapTool?._meta?.ui as { resourceUri?: string } | undefined;
     const linesUiMetadata = linesMapTool?._meta?.ui as { resourceUri?: string } | undefined;
     const positionsUiMetadata = positionsMapTool?._meta?.ui as { resourceUri?: string } | undefined;
     const rechargeUiMetadata = rechargeMapTool?._meta?.ui as { resourceUri?: string } | undefined;
-    assert.equal(uiMetadata?.resourceUri, 'ui://santander/bus-map-v6.html');
-    assert.equal(linesUiMetadata?.resourceUri, 'ui://santander/bus-map-v6.html');
-    assert.equal(positionsUiMetadata?.resourceUri, 'ui://santander/bus-map-v6.html');
-    assert.equal(rechargeUiMetadata?.resourceUri, 'ui://santander/bus-map-v6.html');
+    const tuebiciUiMetadata = tuebiciMapTool?._meta?.ui as { resourceUri?: string } | undefined;
+    assert.equal(uiMetadata?.resourceUri, 'ui://santander/bus-map-v7.html');
+    assert.equal(linesUiMetadata?.resourceUri, 'ui://santander/bus-map-v7.html');
+    assert.equal(positionsUiMetadata?.resourceUri, 'ui://santander/bus-map-v7.html');
+    assert.equal(rechargeUiMetadata?.resourceUri, 'ui://santander/bus-map-v7.html');
+    assert.equal(tuebiciUiMetadata?.resourceUri, 'ui://santander/bus-map-v7.html');
 
-    const resource = await client.readResource({ uri: 'ui://santander/bus-map-v6.html' });
+    const resource = await client.readResource({ uri: 'ui://santander/bus-map-v7.html' });
     assert.equal(resource.contents[0]?.mimeType, 'text/html;profile=mcp-app');
     const resourceMetadata = resource.contents[0]?._meta?.ui as { domain?: string } | undefined;
     assert.equal(resourceMetadata?.domain, 'https://widgets.example.com');
@@ -149,6 +152,42 @@ test('registers the bus map resource and returns renderable stop and line data',
             town: 'Santander',
             latitude: 43.4623,
             longitude: -3.8099
+        }]
+    });
+
+    const tuebiciResult = await client.callTool({
+        name: 'santander_render_tuebici_stations_map',
+        arguments: {
+            title: 'TUeBICI availability',
+            stations: [{
+                stationId: '1',
+                short_name: '37400',
+                name: 'Sardinero',
+                latitude: 43.477,
+                longitude: -3.791,
+                capacity: 20,
+                bikes_available: 6,
+                docks_available: 9,
+                is_renting: true,
+                is_returning: true,
+                last_reported_at: '2026-08-23T06:56:15.000Z'
+            }]
+        }
+    });
+    assert.deepEqual(tuebiciResult.structuredContent, {
+        title: 'TUeBICI availability',
+        stations: [{
+            stationId: '1',
+            short_name: '37400',
+            name: 'Sardinero',
+            latitude: 43.477,
+            longitude: -3.791,
+            capacity: 20,
+            bikes_available: 6,
+            docks_available: 9,
+            is_renting: true,
+            is_returning: true,
+            last_reported_at: '2026-08-23T06:56:15.000Z'
         }]
     });
 });

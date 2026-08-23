@@ -107,6 +107,40 @@ export const tusRechargePointSchema = z.object({
     uri: webUrlSchema
 });
 
+const gbfsEnvelopeSchema = <T extends z.ZodType>(dataSchema: T) => z.object({
+    last_updated: z.number().int().nonnegative(),
+    ttl: z.number().int().nonnegative(),
+    data: dataSchema
+});
+
+const tuebiciStationInformationSchema = z.object({
+    station_id: nonEmptyStringSchema,
+    name: nonEmptyStringSchema,
+    short_name: z.string().optional(),
+    lat: z.number().min(-90).max(90),
+    lon: z.number().min(-180).max(180),
+    capacity: z.number().int().nonnegative(),
+    rental_uris: z.object({ web: httpsUrlSchema.optional() }).optional()
+});
+
+const tuebiciStationStatusSchema = z.object({
+    station_id: nonEmptyStringSchema,
+    num_bikes_available: z.number().int().nonnegative(),
+    num_docks_available: z.number().int().nonnegative(),
+    is_installed: z.boolean(),
+    is_renting: z.boolean(),
+    is_returning: z.boolean(),
+    last_reported: z.number().int().nonnegative()
+});
+
+export const tuebiciStationInformationResponseSchema = gbfsEnvelopeSchema(z.object({
+    stations: z.array(tuebiciStationInformationSchema)
+}));
+
+export const tuebiciStationStatusResponseSchema = gbfsEnvelopeSchema(z.object({
+    stations: z.array(tuebiciStationStatusSchema)
+}));
+
 export const busEstimationSchema = z.object({
     'ayto:tiempo1': integerStringSchema,
     'ayto:distancia2': optionalIntegerStringSchema,
@@ -173,6 +207,18 @@ export const tusRechargePointsInputSchema = z.object({
         .optional(),
     limit: z.number().int().min(1).max(100)
         .describe('Maximum number of recharge points to return (1-100)')
+        .default(20)
+});
+
+export const tuebiciStationsInputSchema = z.object({
+    search: z.string().trim().min(1).max(100)
+        .describe('Optional station name or public short number')
+        .optional(),
+    onlyAvailable: z.boolean()
+        .describe('Only return stations currently renting with at least one bike')
+        .default(false),
+    limit: z.number().int().min(1).max(100)
+        .describe('Maximum number of stations to return (1-100)')
         .default(20)
 });
 
@@ -290,6 +336,35 @@ export const tusRechargePointsResultSchema = z.object({
     }))
 }).refine((result) => result.returned === result.points.length && result.total_found >= result.returned, {
     message: 'Recharge-point counts do not match the returned resources'
+});
+
+export const tuebiciStationsResultSchema = z.object({
+    ...sourceMetadataShape,
+    feed_updated_at: z.iso.datetime(),
+    filters: z.object({
+        search: nonEmptyStringSchema.optional(),
+        onlyAvailable: z.boolean()
+    }),
+    total_found: z.number().int().nonnegative(),
+    returned: z.number().int().nonnegative(),
+    warnings: z.array(nonEmptyStringSchema),
+    stations: z.array(z.object({
+        stationId: nonEmptyStringSchema,
+        short_name: z.string().optional(),
+        name: nonEmptyStringSchema,
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+        capacity: z.number().int().nonnegative(),
+        bikes_available: z.number().int().nonnegative().nullable(),
+        docks_available: z.number().int().nonnegative().nullable(),
+        is_installed: z.boolean().nullable(),
+        is_renting: z.boolean().nullable(),
+        is_returning: z.boolean().nullable(),
+        last_reported_at: z.iso.datetime().nullable(),
+        rental_url: httpsUrlSchema.optional()
+    }))
+}).refine((result) => result.returned === result.stations.length && result.total_found >= result.returned, {
+    message: 'TUeBICI station counts do not match the returned resources'
 });
 
 const formattedEstimationSchema = z.object({

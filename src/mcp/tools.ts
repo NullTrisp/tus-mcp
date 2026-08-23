@@ -13,7 +13,9 @@ import {
     recentBusPositionsInputSchema,
     recentBusPositionsResultSchema,
     tusRechargePointsInputSchema,
-    tusRechargePointsResultSchema
+    tusRechargePointsResultSchema,
+    tuebiciStationsInputSchema,
+    tuebiciStationsResultSchema
 } from '../types/bus.js';
 
 const readOnlyAnnotations = {
@@ -185,6 +187,28 @@ export function registerTools(server: McpServer) {
                 );
             } catch (error: unknown) {
                 return errorResult('fetch TUS recharge points from Santander Open Data', error);
+            }
+        }
+    );
+
+    server.registerTool(
+        'santander_get_tuebici_stations',
+        {
+            description: 'Get current TUeBICI electric-bike stations and availability from the official operator GBFS feed.',
+            inputSchema: tuebiciStationsInputSchema,
+            outputSchema: tuebiciStationsResultSchema,
+            annotations: readOnlyAnnotations
+        },
+        async ({ limit, search, onlyAvailable }): Promise<CallToolResult> => {
+            try {
+                const result = await SantanderBusService.getTuebiciStations(limit, search, onlyAvailable);
+                return successResult(
+                    `Found ${result.total_found} matching TUeBICI stations; returned ${result.returned}.`,
+                    'santander://tuebici/stations',
+                    result
+                );
+            } catch (error: unknown) {
+                return errorResult('fetch TUeBICI stations and availability', error);
             }
         }
     );

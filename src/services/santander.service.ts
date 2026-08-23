@@ -22,6 +22,10 @@ import {
     tusRechargePointSchema,
     tusRechargePointsInputSchema,
     tusRechargePointsResultSchema,
+    tuebiciStationInformationResponseSchema,
+    tuebiciStationsInputSchema,
+    tuebiciStationsResultSchema,
+    tuebiciStationStatusResponseSchema,
     BusLine,
     BusPosition,
     BusStop,
@@ -43,9 +47,31 @@ type DatasetName =
 
 export class SantanderBusService {
     private static readonly BASE_URL = 'https://datos.santander.es/api/rest/datasets';
+    private static readonly TUEBICI_STATION_INFORMATION_URL = 'https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_ek/es/station_information.json';
+    private static readonly TUEBICI_STATION_STATUS_URL = 'https://gbfs.nextbike.net/maps/gbfs/v2/nextbike_ek/es/station_status.json';
 
     private static datasetUrl(dataset: DatasetName) {
         return `${this.BASE_URL}/${dataset}.json`;
+    }
+
+    private static async fetchGbfs<T>(url: string, schema: z.ZodType<T>): Promise<T> {
+        let response: Response;
+        try {
+            response = await fetch(url, {
+                headers: { accept: 'application/json' },
+                signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+            });
+        } catch (error) {
+            throw new Error('TUeBICI GBFS request failed.', { cause: error });
+        }
+        if (!response.ok) {
+            throw new Error(`TUeBICI GBFS request failed (${response.status} ${response.statusText}).`);
+        }
+        const parsed = schema.safeParse(await response.json());
+        if (!parsed.success) {
+            throw new Error(`TUeBICI GBFS returned invalid data: ${z.prettifyError(parsed.error)}`);
+        }
+        return parsed.data;
     }
 
     private static async fetchPage<T extends { uri: string }>(
@@ -385,6 +411,62 @@ export class SantanderBusService {
             total_found: points.length,
             returned: limitedPoints.length,
             points: limitedPoints
+        });
+    }
+
+    static async getTuebiciStations(limit: number = 20, search?: string, onlyAvailable: boolean = false) {
+        const input = tuebiciStationsInputSchema.parse({ limit, search, onlyAvailable });
+        const [information, availability] = await Promise.all([
+            this.fetchGbfs(this.TUEBICI_STATION_INFORMATION_URL, tuebiciStationInformationResponseSchema),
+            this.fetchGbfs(this.TUEBICI_STATION_STATUS_URL, tuebiciStationStatusResponseSchema)
+        ]);
+        const statusById = new Map(availability.data.stations.map((status) => [status.station_id, status]));
+        const warnings: string[] = [];
+        let stations = information.data.stations.map((station) => {
+            const status = statusById.get(station.station_id);
+            if (!status) warnings.push(`Station ${station.station_id} has no current availability record.`);
+            return {
+                stationId: station.station_id,
+                ...(station.short_name && { short_name: station.short_name }),
+                name: station.name,
+                latitude: station.lat,
+                longitude: station.lon,
+                capacity: station.capacity,
+                bikes_available: status?.num_bikes_available ?? null,
+                docks_available: status?.num_docks_available ?? null,
+                is_installed: status?.is_installed ?? null,
+                is_renting: status?.is_renting ?? null,
+                is_returning: status?.is_returning ?? null,
+                last_reported_at: status ? new Date(status.last_reported * 1000).toISOString() : null,
+                ...(station.rental_uris?.web && { rental_url: station.rental_uris.web })
+            };
+        });
+        if (input.search) {
+            const term = input.search.toLowerCase();
+            stations = stations.filter((station) =>
+                station.name.toLowerCase().includes(term) || station.short_name?.toLowerCase().includes(term)
+            );
+        }
+        if (input.onlyAvailable) {
+            stations = stations.filter((station) => station.is_renting && (station.bikes_available ?? 0) > 0);
+        }
+        stations.sort((first, second) =>
+            (second.bikes_available ?? -1) - (first.bikes_available ?? -1) || first.name.localeCompare(second.name)
+        );
+        const limitedStations = stations.slice(0, input.limit);
+
+        return tuebiciStationsResultSchema.parse({
+            source_urls: [this.TUEBICI_STATION_INFORMATION_URL, this.TUEBICI_STATION_STATUS_URL],
+            fetched_at: new Date().toISOString(),
+            feed_updated_at: new Date(Math.min(information.last_updated, availability.last_updated) * 1000).toISOString(),
+            filters: {
+                ...(input.search && { search: input.search }),
+                onlyAvailable: input.onlyAvailable
+            },
+            total_found: stations.length,
+            returned: limitedStations.length,
+            warnings,
+            stations: limitedStations
         });
     }
 

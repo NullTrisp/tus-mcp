@@ -304,6 +304,46 @@ test('filters and limits TUS recharge points', async (context) => {
     assert.equal(result.points[0].latitude, 43.46);
 });
 
+test('joins TUeBICI station information with current availability', async (context) => {
+    mockOpenData(context, (url) => {
+        if (url.pathname.endsWith('/station_information.json')) {
+            return {
+                last_updated: 1787472976,
+                ttl: 60,
+                data: {
+                    stations: [
+                        { station_id: '1', short_name: '37400', name: 'Sardinero', lat: 43.477, lon: -3.791, capacity: 20 },
+                        { station_id: '2', short_name: '37401', name: 'Centro', lat: 43.462, lon: -3.81, capacity: 14 }
+                    ]
+                }
+            };
+        }
+        if (url.pathname.endsWith('/station_status.json')) {
+            return {
+                last_updated: 1787472975,
+                ttl: 60,
+                data: {
+                    stations: [
+                        { station_id: '1', num_bikes_available: 6, num_docks_available: 9, is_installed: true, is_renting: true, is_returning: true, last_reported: 1787472975 },
+                        { station_id: '2', num_bikes_available: 0, num_docks_available: 14, is_installed: true, is_renting: true, is_returning: true, last_reported: 1787472975 }
+                    ]
+                }
+            };
+        }
+        throw new Error(`Unexpected GBFS request: ${url}`);
+    });
+
+    const result = await SantanderBusService.getTuebiciStations(10, undefined, true);
+
+    assert.equal(result.total_found, 1);
+    assert.equal(result.returned, 1);
+    assert.equal(result.stations[0].name, 'Sardinero');
+    assert.equal(result.stations[0].bikes_available, 6);
+    assert.equal(result.stations[0].docks_available, 9);
+    assert.equal(result.warnings.length, 0);
+    assert.equal(result.source_urls.every((url) => url.startsWith('https://gbfs.nextbike.net/')), true);
+});
+
 test('prioritizes public stop number 15 over a colliding API resource ID', async (context) => {
     const resourceIdMatch = busStop({
         'ayto:numero': '48',
@@ -403,6 +443,8 @@ test('rejects invalid inputs and limits before contacting Open Data', async (con
         ['invalid position age', () => SantanderBusService.getRecentBusPositions(undefined, 0)],
         ['blank recharge search', () => SantanderBusService.getTusRechargePoints(20, '   ')],
         ['invalid recharge limit', () => SantanderBusService.getTusRechargePoints(0)],
+        ['blank TUeBICI search', () => SantanderBusService.getTuebiciStations(20, '   ')],
+        ['invalid TUeBICI limit', () => SantanderBusService.getTuebiciStations(0)],
         ['invalid estimation stop', () => SantanderBusService.getBusEstimations('stop-15')],
         ['blank estimation line', () => SantanderBusService.getBusEstimations(undefined, '   ')],
         ['zero estimation limit', () => SantanderBusService.getBusEstimations(undefined, undefined, 0)],

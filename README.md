@@ -1,6 +1,6 @@
 # TUS Santander MCP Server
 
-MCP server for Santander's TUS bus data. Every tool reads the official Santander Open Data API over HTTPS, validates every page with Zod at runtime, and returns validated structured output.
+MCP server for Santander's TUS bus and TUeBICI data. Tools read the official Santander Open Data API or the official TUeBICI operator GBFS feed over HTTPS, validate responses with Zod, and return structured output.
 
 ## Tools
 
@@ -25,6 +25,11 @@ MCP server for Santander's TUS bus data. Every tool reads the official Santander
 - `santander_get_tus_recharge_points`
   - `search`: optional name, address, postcode, town, or vendor type.
   - `limit`: integer from 1 to 100; defaults to 20.
+- `santander_get_tuebici_stations`
+  - `search`: optional station name or public short number.
+  - `onlyAvailable`: only return stations currently renting with at least one bicycle; defaults to `false`.
+  - `limit`: integer from 1 to 100; defaults to 20.
+  - Joins station information and availability from the official TUeBICI/Nextbike GBFS feed.
 - `santander_render_bus_stops_map`
   - Renders up to 100 selected stops as clickable pins in an interactive OpenStreetMap widget.
   - Call a stop data tool first, then pass each stop's public ID, name, and numeric WGS84 latitude/longitude.
@@ -39,6 +44,9 @@ MCP server for Santander's TUS bus data. Every tool reads the official Santander
 - `santander_render_tus_recharge_points_map`
   - Renders up to 100 TUS sale and recharge points as clickable markers.
   - Call `santander_get_tus_recharge_points` first and pass its `points` array.
+- `santander_render_tuebici_stations_map`
+  - Renders up to 100 TUeBICI stations, with availability shown by marker color.
+  - Call `santander_get_tuebici_stations` first and pass its `stations` array.
 
 The estimates tool preserves the API's exact signed integer values as `arrival_seconds` and `distance_meters`. Empty second-bus values become `null`; they are not presented as inferred arrival states. Recent positions are filtered at the Open Data API before download and deduplicated by vehicle. Each result includes `source_urls` and `fetched_at`, while time-sensitive records include their observation timestamp.
 

@@ -2,7 +2,7 @@ import { registerAppResource, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/e
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod/v4';
 
-const mapUri = 'ui://santander/bus-map-v6.html';
+const mapUri = 'ui://santander/bus-map-v7.html';
 const readOnlyAnnotations = {
     readOnlyHint: true,
     destructiveHint: false,
@@ -90,6 +90,24 @@ const tusRechargePointsMapSchema = z.object({
     })).min(1).max(100)
 });
 
+const tuebiciStationsMapSchema = z.object({
+    title: z.string().min(1).max(100).default('TUeBICI stations'),
+    stations: z.array(z.object({
+        stationId: z.string().min(1),
+        short_name: z.string().optional(),
+        name: z.string().min(1),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+        capacity: z.number().int().nonnegative(),
+        bikes_available: z.number().int().nonnegative().nullable(),
+        docks_available: z.number().int().nonnegative().nullable(),
+        is_renting: z.boolean().nullable(),
+        is_returning: z.boolean().nullable(),
+        last_reported_at: z.iso.datetime().nullable(),
+        rental_url: z.url().optional()
+    })).min(1).max(100)
+});
+
 const mapHtml = String.raw`<!doctype html>
 <html lang="en">
 <head>
@@ -165,16 +183,45 @@ const mapHtml = String.raw`<!doctype html>
             return container;
         }
 
+        function tuebiciStationPopup(station) {
+            const container = document.createElement('div');
+            const heading = document.createElement('strong');
+            const details = document.createElement('span');
+            heading.textContent = station.name;
+            details.textContent = [
+                station.bikes_available != null && station.bikes_available + ' bikes',
+                station.docks_available != null && station.docks_available + ' free docks',
+                'Capacity ' + station.capacity,
+                station.is_renting === false && 'Renting unavailable'
+            ].filter(Boolean).join(' · ');
+            container.append(heading, details);
+            return container;
+        }
+
         function render(data) {
             const hasStops = Array.isArray(data?.stops) && data.stops.length > 0;
             const hasLines = Array.isArray(data?.lines) && data.lines.length > 0;
             const hasPositions = Array.isArray(data?.positions) && data.positions.length > 0;
             const hasRechargePoints = Array.isArray(data?.points) && data.points.length > 0;
-            if (!hasStops && !hasLines && !hasPositions && !hasRechargePoints) return;
-            title.textContent = data.title || (hasRechargePoints ? 'TUS recharge points' : hasPositions ? 'Recent Santander buses' : hasLines ? 'Santander bus lines' : 'Santander bus stops');
+            const hasTuebiciStations = Array.isArray(data?.stations) && data.stations.length > 0;
+            if (!hasStops && !hasLines && !hasPositions && !hasRechargePoints && !hasTuebiciStations) return;
+            title.textContent = data.title || (hasTuebiciStations ? 'TUeBICI stations' : hasRechargePoints ? 'TUS recharge points' : hasPositions ? 'Recent Santander buses' : hasLines ? 'Santander bus lines' : 'Santander bus stops');
             layers.clearLayers();
             const bounds = [];
-            if (hasRechargePoints) {
+            if (hasTuebiciStations) {
+                data.stations.forEach((station) => {
+                    const coordinates = [station.latitude, station.longitude];
+                    const color = station.is_renting && (station.bikes_available || 0) > 0 ? '#2ca02c' : '#d62728';
+                    L.circleMarker(coordinates, {
+                        color,
+                        fillColor: color,
+                        fillOpacity: 0.9,
+                        radius: 7,
+                        weight: 2
+                    }).bindPopup(tuebiciStationPopup(station)).addTo(layers);
+                    bounds.push(coordinates);
+                });
+            } else if (hasRechargePoints) {
                 data.points.forEach((point) => {
                     const coordinates = [point.latitude, point.longitude];
                     L.marker(coordinates).bindPopup(rechargePointPopup(point)).addTo(layers);
@@ -253,7 +300,7 @@ export function registerBusMap(server: McpServer, widgetDomain: string) {
         server,
         'Santander bus map',
         mapUri,
-        { description: 'Interactive map used by the Santander bus-stop, bus-line, live-position, and TUS recharge-point renderers.' },
+        { description: 'Interactive map used by the Santander mobility renderers.' },
         async () => ({
             contents: [{
                 uri: mapUri,
@@ -363,6 +410,29 @@ export function registerBusMap(server: McpServer, widgetDomain: string) {
             content: [{
                 type: 'text',
                 text: `Showing ${points.length} TUS recharge ${points.length === 1 ? 'point' : 'points'} on the map.`
+            }]
+        })
+    );
+
+    server.registerTool(
+        'santander_render_tuebici_stations_map',
+        {
+            title: 'Show TUeBICI stations on a map',
+            description: 'Render current TUeBICI station availability on an interactive map. First call santander_get_tuebici_stations, then pass its stations array.',
+            inputSchema: tuebiciStationsMapSchema,
+            outputSchema: tuebiciStationsMapSchema,
+            annotations: readOnlyAnnotations,
+            _meta: {
+                ui: { resourceUri: mapUri },
+                'openai/toolInvocation/invoking': 'Preparing the TUeBICI map…',
+                'openai/toolInvocation/invoked': 'TUeBICI map ready.'
+            }
+        },
+        async ({ title, stations }) => ({
+            structuredContent: { title, stations },
+            content: [{
+                type: 'text',
+                text: `Showing ${stations.length} TUeBICI ${stations.length === 1 ? 'station' : 'stations'} on the map.`
             }]
         })
     );
