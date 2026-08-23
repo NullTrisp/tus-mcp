@@ -26,18 +26,19 @@ test('registers the bus map resource and returns renderable stop and line data',
     const positionsUiMetadata = positionsMapTool?._meta?.ui as { resourceUri?: string } | undefined;
     const rechargeUiMetadata = rechargeMapTool?._meta?.ui as { resourceUri?: string } | undefined;
     const tuebiciUiMetadata = tuebiciMapTool?._meta?.ui as { resourceUri?: string } | undefined;
-    assert.equal(uiMetadata?.resourceUri, 'ui://santander/bus-map-v7.html');
-    assert.equal(linesUiMetadata?.resourceUri, 'ui://santander/bus-map-v7.html');
-    assert.equal(positionsUiMetadata?.resourceUri, 'ui://santander/bus-map-v7.html');
-    assert.equal(rechargeUiMetadata?.resourceUri, 'ui://santander/bus-map-v7.html');
-    assert.equal(tuebiciUiMetadata?.resourceUri, 'ui://santander/bus-map-v7.html');
+    assert.equal(uiMetadata?.resourceUri, 'ui://santander/bus-map-v8.html');
+    assert.equal(linesUiMetadata?.resourceUri, 'ui://santander/bus-map-v8.html');
+    assert.equal(positionsUiMetadata?.resourceUri, 'ui://santander/bus-map-v8.html');
+    assert.equal(rechargeUiMetadata?.resourceUri, 'ui://santander/bus-map-v8.html');
+    assert.equal(tuebiciUiMetadata?.resourceUri, 'ui://santander/bus-map-v8.html');
 
-    const resource = await client.readResource({ uri: 'ui://santander/bus-map-v7.html' });
+    const resource = await client.readResource({ uri: 'ui://santander/bus-map-v8.html' });
     assert.equal(resource.contents[0]?.mimeType, 'text/html;profile=mcp-app');
     const resourceMetadata = resource.contents[0]?._meta?.ui as { domain?: string } | undefined;
     assert.equal(resourceMetadata?.domain, 'https://widgets.example.com');
     assert.match('text' in resource.contents[0]! ? resource.contents[0].text : '', /OpenStreetMap/);
     assert.match('text' in resource.contents[0]! ? resource.contents[0].text : '', /L\.polyline/);
+    assert.match('text' in resource.contents[0]! ? resource.contents[0].text : '', /route\.direction === '1' \? 'Ida'/);
 
     const result = await client.callTool({
         name: 'santander_render_bus_stops_map',

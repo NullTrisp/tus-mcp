@@ -2,7 +2,7 @@ import { registerAppResource, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/e
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod/v4';
 
-const mapUri = 'ui://santander/bus-map-v7.html';
+const mapUri = 'ui://santander/bus-map-v8.html';
 const readOnlyAnnotations = {
     readOnlyHint: true,
     destructiveHint: false,
@@ -122,6 +122,9 @@ const mapHtml = String.raw`<!doctype html>
         button { background: ButtonFace; border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); border-radius: 8px; color: ButtonText; cursor: pointer; padding: 6px 10px; }
         #map { height: min(62vh, 520px); min-height: 320px; width: 100%; }
         #empty { padding: 32px; text-align: center; }
+        .route-legend { background: Canvas; border-radius: 6px; box-shadow: 0 1px 5px rgb(0 0 0 / 35%); color: CanvasText; padding: 8px 10px; }
+        .route-legend div { align-items: center; display: flex; gap: 6px; margin-top: 4px; }
+        .route-legend i { border-radius: 2px; display: inline-block; height: 4px; width: 18px; }
         .leaflet-popup-content strong, .leaflet-popup-content span { display: block; }
     </style>
 </head>
@@ -140,6 +143,10 @@ const mapHtml = String.raw`<!doctype html>
         const fullscreen = document.getElementById('fullscreen');
         const map = L.map(mapElement);
         const layers = L.layerGroup().addTo(map);
+        const routeLegend = L.control({ position: 'bottomright' });
+        routeLegend.onAdd = () => L.DomUtil.create('div', 'route-legend');
+        routeLegend.addTo(map);
+        routeLegend.getContainer().hidden = true;
         const lineColors = ['#0066cc', '#d62728', '#2ca02c', '#9467bd', '#ff7f0e', '#008b8b', '#c2185b', '#6d4c41', '#455a64', '#7cb342'];
 
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -207,6 +214,8 @@ const mapHtml = String.raw`<!doctype html>
             if (!hasStops && !hasLines && !hasPositions && !hasRechargePoints && !hasTuebiciStations) return;
             title.textContent = data.title || (hasTuebiciStations ? 'TUeBICI stations' : hasRechargePoints ? 'TUS recharge points' : hasPositions ? 'Recent Santander buses' : hasLines ? 'Santander bus lines' : 'Santander bus stops');
             layers.clearLayers();
+            routeLegend.getContainer().replaceChildren();
+            routeLegend.getContainer().hidden = true;
             const bounds = [];
             if (hasTuebiciStations) {
                 data.stations.forEach((station) => {
@@ -249,16 +258,26 @@ const mapHtml = String.raw`<!doctype html>
                 data.lines.forEach((line, index) => {
                     const color = lineColors[index % lineColors.length];
                     const routes = Array.isArray(line.routes) ? line.routes : [{ stops: line.stops }];
-                    routes.forEach((route) => {
+                    routes.forEach((route, routeIndex) => {
+                        const routeColor = line.routes ? lineColors[routeIndex % lineColors.length] : color;
                         const routePoints = route.stops.map((stop) => [stop.latitude, stop.longitude]);
                         if (line.routes) {
-                            L.polyline(routePoints, { color, dashArray: '6 6', opacity: 0.75, weight: 3 }).addTo(layers);
+                            L.polyline(routePoints, { color: routeColor, dashArray: '6 6', opacity: 0.8, weight: 3 }).addTo(layers);
+                            const direction = route.direction === '1' ? 'Ida' : route.direction === '2' ? 'Vuelta' : 'Sentido ' + route.direction;
+                            const item = document.createElement('div');
+                            const swatch = document.createElement('i');
+                            const label = document.createElement('span');
+                            swatch.style.background = routeColor;
+                            label.textContent = 'Línea ' + line.id + ' · ' + direction + ' · ' + route.name;
+                            item.append(swatch, label);
+                            routeLegend.getContainer().append(item);
+                            routeLegend.getContainer().hidden = false;
                         }
                         route.stops.forEach((stop) => {
                         const point = [stop.latitude, stop.longitude];
                         L.circleMarker(point, {
-                            color,
-                            fillColor: color,
+                            color: routeColor,
+                            fillColor: routeColor,
                             fillOpacity: 0.9,
                             radius: 4,
                             weight: 2
