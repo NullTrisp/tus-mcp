@@ -32,21 +32,10 @@ const readOnlyAnnotations = {
 
 function successResult<T extends Record<string, unknown>>(
     summary: string,
-    uri: string,
     result: T
 ): CallToolResult {
     return {
-        content: [
-            { type: 'text', text: summary },
-            {
-                type: 'resource',
-                resource: {
-                    uri,
-                    text: JSON.stringify(result, null, 2),
-                    mimeType: 'application/json'
-                }
-            }
-        ],
+        content: [{ type: 'text', text: summary }],
         structuredContent: result
     };
 }
@@ -83,7 +72,6 @@ export function registerTools(server: McpServer) {
                 const result = await SantanderBusService.getBusStops(limit, search);
                 return successResult(
                     `Found ${result.total_found} matching bus stops; returned ${result.returned}.`,
-                    'santander://bus/stops',
                     result
                 );
             } catch (error: unknown) {
@@ -111,7 +99,6 @@ export function registerTools(server: McpServer) {
                 );
                 return successResult(
                     `Found ${result.total_found} bus stops within ${result.radius_meters} meters; returned ${result.returned}.`,
-                    `santander://bus/stops/nearby?radius=${result.radius_meters}`,
                     result
                 );
             } catch (error: unknown) {
@@ -133,7 +120,6 @@ export function registerTools(server: McpServer) {
                 const result = await SantanderBusService.getBusLines(search);
                 return successResult(
                     `Found ${result.total_found} bus lines. Use ayto:numero as the public line number.`,
-                    'santander://bus/lines',
                     result
                 );
             } catch (error: unknown) {
@@ -155,7 +141,6 @@ export function registerTools(server: McpServer) {
                 const result = await SantanderBusService.getBusLineStops(lineId);
                 return successResult(
                     `Line ${result.line} (${result.line_name}) serves ${result.total_found} stop relationships across ${result.routes.length} ordered routes.`,
-                    `santander://bus/line/${encodeURIComponent(result.line)}/stops`,
                     result
                 );
             } catch (error: unknown) {
@@ -175,14 +160,9 @@ export function registerTools(server: McpServer) {
         async ({ stopId, lineId, limit }): Promise<CallToolResult> => {
             try {
                 const result = await SantanderBusService.getBusEstimations(stopId, lineId, limit);
-                const query = new URLSearchParams({
-                    ...(result.filters.stopId && { stop: result.filters.stopId }),
-                    ...(result.filters.lineId && { line: result.filters.lineId })
-                }).toString();
                 const warningText = result.warnings.length ? ` Warnings: ${result.warnings.join(' ')}` : '';
                 return successResult(
                     `Found ${result.total_found} published arrival estimates; returned ${result.returned}.${warningText}`,
-                    `santander://bus/estimations${query ? `?${query}` : ''}`,
                     result
                 );
             } catch (error: unknown) {
@@ -204,7 +184,6 @@ export function registerTools(server: McpServer) {
                 const result = await SantanderBusService.getRecentBusPositions(lineId, maxAgeMinutes);
                 return successResult(
                     `Found ${result.returned} buses from ${result.total_observations} position observations published within the last ${result.filters.maxAgeMinutes} minutes.`,
-                    `santander://bus/positions${result.filters.lineId ? `?line=${encodeURIComponent(result.filters.lineId)}` : ''}`,
                     result
                 );
             } catch (error: unknown) {
@@ -226,7 +205,6 @@ export function registerTools(server: McpServer) {
                 const result = await SantanderBusService.getTusRechargePoints(limit, search);
                 return successResult(
                     `Found ${result.total_found} matching TUS recharge points; returned ${result.returned}.`,
-                    'santander://tus/recharge-points',
                     result
                 );
             } catch (error: unknown) {
@@ -254,7 +232,6 @@ export function registerTools(server: McpServer) {
                 );
                 return successResult(
                     `Found ${result.total_found} TUS recharge points within ${result.radius_meters} meters; returned ${result.returned}.`,
-                    `santander://tus/recharge-points/nearby?radius=${result.radius_meters}`,
                     result
                 );
             } catch (error: unknown) {
@@ -276,7 +253,6 @@ export function registerTools(server: McpServer) {
                 const result = await SantanderBusService.getTuebiciStations(limit, search, onlyAvailable);
                 return successResult(
                     `Found ${result.total_found} matching TUeBICI stations; returned ${result.returned}.`,
-                    'santander://tuebici/stations',
                     result
                 );
             } catch (error: unknown) {
@@ -305,7 +281,6 @@ export function registerTools(server: McpServer) {
                 );
                 return successResult(
                     `Found ${result.total_found} TUeBICI stations within ${result.radius_meters} meters; returned ${result.returned}.`,
-                    `santander://tuebici/stations/nearby?radius=${result.radius_meters}`,
                     result
                 );
             } catch (error: unknown) {
